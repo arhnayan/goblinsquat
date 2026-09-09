@@ -51,7 +51,7 @@ import {
 } from "./path";
 import { enterPos, getFloor, newRun, parseSeed, urlSeed, type Run } from "./run";
 import { PLAY_HINT, type Hud } from "./hud";
-import { followIsoCamera } from "./camera";
+import { followIsoCamera, getHudMotion } from "./camera";
 import { formatScores, recordScore, runScore } from "./score";
 
 type Occ = { kind: "player" } | { kind: "monster"; id: number };
@@ -1040,6 +1040,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     }
 
     followIsoCamera(camera, player.follow.position, dt);
+    hud.updateMotion(time, getHudMotion(), reduced);
   };
 
   const restart = () => startNew(undefined, false);

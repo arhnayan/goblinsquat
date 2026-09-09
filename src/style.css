@@ -40,6 +40,12 @@ canvas {
     inset -2px -2px 0 color-mix(in srgb, var(--void, #16120c) 70%, black);
 }
 
+.hud-float {
+  will-change: transform;
+  transform-origin: center center;
+  backface-visibility: hidden;
+}
+
 #status,
 #log,
 #hint,
@@ -203,7 +209,6 @@ canvas {
   inset: auto;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;

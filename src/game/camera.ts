@@ -5,6 +5,17 @@ const OFFSET = new Vector3(16, 16, 16);
 const mouse = new Vector2(0, 0);
 const look = new Vector3();
 const pan = new Vector3();
+const prevCam = new Vector3();
+const sway = new Vector2(0, 0);
+const lean = new Vector2(0, 0);
+let camReady = false;
+
+export type HudMotion = {
+  swayX: number;
+  swayY: number;
+  leanX: number;
+  leanY: number;
+};
 
 export function createIsoCamera(aspect: number): OrthographicCamera {
   const camera = new OrthographicCamera(
@@ -50,4 +61,41 @@ export function followIsoCamera(
   pan.set(mouse.x * 1.4, 0, mouse.y * 1.4);
   camera.position.copy(look).add(OFFSET).add(pan);
   camera.lookAt(look);
+
+  if (!camReady) {
+    prevCam.copy(camera.position);
+    camReady = true;
+    return;
+  }
+
+  const dx = camera.position.x - prevCam.x;
+  const dz = camera.position.z - prevCam.z;
+  prevCam.copy(camera.position);
+
+  sway.x += (-dx + dz) * 11;
+  sway.y += (dx + dz) * 5.5;
+  const decay = Math.exp(-dt * 4.2);
+  sway.x *= decay;
+  sway.y *= decay;
+
+  const targetLeanX = mouse.x * 5.5;
+  const targetLeanY = mouse.y * -4.5;
+  const lk = 1 - Math.exp(-dt * 7);
+  lean.x += (targetLeanX - lean.x) * lk;
+  lean.y += (targetLeanY - lean.y) * lk;
+}
+
+export function getHudMotion(): HudMotion {
+  return {
+    swayX: sway.x,
+    swayY: sway.y,
+    leanX: lean.x,
+    leanY: lean.y,
+  };
+}
+
+export function resetHudMotion(): void {
+  sway.set(0, 0);
+  lean.set(0, 0);
+  camReady = false;
 }

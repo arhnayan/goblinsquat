@@ -1,4 +1,5 @@
 import type { Run } from "./run";
+import type { HudMotion } from "./camera";
 import { getTheme } from "./theme";
 import { countKind, itemTag } from "./inventory";
 import { packLetter } from "./catalog";
@@ -23,6 +24,16 @@ export type Hud = {
   setHint: (text: string) => void;
   clearLog: () => void;
   bind: (next: HudHooks) => void;
+  updateMotion: (time: number, motion: HudMotion, reduced: boolean) => void;
+};
+
+type FloatPanel = {
+  node: HTMLElement;
+  phase: number;
+  parallax: number;
+  tilt: number;
+  bob: number;
+  centered?: boolean;
 };
 
 const PLAY_HINT = "WASD/hjkl  . wait  z rest  i pack  x look  ? help  F pixel  C palette";
@@ -63,12 +74,21 @@ export function createHud(): Hud {
   let lookText: string | null = null;
   let hooks: HudHooks | null = null;
 
-  status.classList.add("panel");
-  logBox.classList.add("panel");
-  hint.classList.add("panel");
-  lookBox.classList.add("panel");
-  packBox.classList.add("panel");
-  overlayBox.classList.add("panel");
+  status.classList.add("panel", "hud-float");
+  logBox.classList.add("panel", "hud-float");
+  hint.classList.add("panel", "hud-float");
+  lookBox.classList.add("panel", "hud-float");
+  packBox.classList.add("panel", "hud-float");
+  overlayBox.classList.add("panel", "hud-float");
+
+  const floatPanels: FloatPanel[] = [
+    { node: status, phase: 0, parallax: 0.42, tilt: 0.35, bob: 2.6 },
+    { node: logBox, phase: 1.15, parallax: 0.3, tilt: 0.28, bob: 2.2 },
+    { node: hint, phase: 2.35, parallax: 0.34, tilt: -0.32, bob: 2.4 },
+    { node: lookBox, phase: 0.75, parallax: 0.36, tilt: 0.22, bob: 2.1 },
+    { node: packBox, phase: 1.85, parallax: 0.46, tilt: -0.28, bob: 2.8 },
+    { node: overlayBox, phase: 0.4, parallax: 0.18, tilt: 0.12, bob: 1.6, centered: true },
+  ];
 
   hint.textContent = PLAY_HINT;
 
@@ -274,6 +294,29 @@ export function createHud(): Hud {
     logBox.textContent = "";
   };
 
+  const updateMotion = (time: number, motion: HudMotion, reduced: boolean) => {
+    for (const panel of floatPanels) {
+      if (panel.node.hidden) {
+        panel.node.style.transform = "";
+        continue;
+      }
+      if (reduced) {
+        panel.node.style.transform = panel.centered ? "translate(-50%, -50%)" : "";
+        continue;
+      }
+      const px =
+        (motion.swayX + motion.leanX) * panel.parallax;
+      const py =
+        (motion.swayY + motion.leanY) * panel.parallax +
+        Math.sin(time * 1.75 + panel.phase) * panel.bob;
+      const roll =
+        Math.sin(time * 1.05 + panel.phase * 1.4) * panel.tilt;
+      panel.node.style.transform = panel.centered
+        ? `translate(calc(-50% + ${px}px), calc(-50% + ${py}px)) rotate(${roll}deg)`
+        : `translate(${px}px, ${py}px) rotate(${roll}deg)`;
+    }
+  };
+
   return {
     log,
     refresh,
@@ -286,6 +329,7 @@ export function createHud(): Hud {
     setHint,
     clearLog,
     bind,
+    updateMotion,
   };
 }
 
