@@ -5,9 +5,12 @@ import { createHud } from "./game/hud";
 import { createGame } from "./game/game";
 import { applyCssVars, cycleTheme } from "./game/theme";
 import { createPixelPass } from "./game/pixel";
+import { bootCatalog } from "./game/catalog";
+import { isFormTarget } from "./game/dom";
 
 async function boot() {
   applyCssVars();
+  bootCatalog();
   const hud = createHud();
   const status = document.getElementById("status");
   if (status) status.textContent = "loading";
@@ -22,6 +25,7 @@ async function boot() {
 
   window.addEventListener("keydown", (e) => {
     if (e.repeat) return;
+    if (isFormTarget(e.target)) return;
     if (e.code === "KeyF") {
       e.preventDefault();
       pixel.toggle();

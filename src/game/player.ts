@@ -24,11 +24,7 @@ import {
 } from "./anim";
 import { makeFitScale, makeGlyphGeometry } from "./glyphs";
 
-export type PlayerIntent =
-  | { type: "move"; dx: number; dz: number }
-  | { type: "wait" }
-  | { type: "quaff" }
-  | { type: "restart" };
+export type PlayerIntent = { type: "move"; dx: number; dz: number } | { type: "wait" };
 
 export type Player = HopRig & {
   follow: Object3D;
@@ -39,7 +35,9 @@ export type Player = HopRig & {
   lunge: { dx: number; dz: number; t: number; struck: boolean } | null;
   settleT: number;
   busy: boolean;
+  setEnabled: (on: boolean) => void;
   consumeIntent: () => PlayerIntent | null;
+  clearIntents: () => void;
   startHop: (toX: number, toZ: number) => void;
   startLunge: (dx: number, dz: number) => void;
   place: (x: number, z: number) => void;
@@ -52,16 +50,63 @@ export type Player = HopRig & {
   dispose: (scene: Scene) => void;
 };
 
-const KEY_DIRS: Record<string, { dx: number; dz: number }> = {
+export const KEY_DIRS: Record<string, { dx: number; dz: number }> = {
   KeyW: { dx: 0, dz: -1 },
   ArrowUp: { dx: 0, dz: -1 },
+  KeyK: { dx: 0, dz: -1 },
+  Numpad8: { dx: 0, dz: -1 },
   KeyS: { dx: 0, dz: 1 },
   ArrowDown: { dx: 0, dz: 1 },
+  KeyJ: { dx: 0, dz: 1 },
+  Numpad2: { dx: 0, dz: 1 },
   KeyA: { dx: -1, dz: 0 },
   ArrowLeft: { dx: -1, dz: 0 },
+  KeyH: { dx: -1, dz: 0 },
+  Numpad4: { dx: -1, dz: 0 },
   KeyD: { dx: 1, dz: 0 },
   ArrowRight: { dx: 1, dz: 0 },
+  KeyL: { dx: 1, dz: 0 },
+  Numpad6: { dx: 1, dz: 0 },
+  KeyY: { dx: -1, dz: -1 },
+  Numpad7: { dx: -1, dz: -1 },
+  KeyU: { dx: 1, dz: -1 },
+  Numpad9: { dx: 1, dz: -1 },
+  KeyB: { dx: -1, dz: 1 },
+  Numpad1: { dx: -1, dz: 1 },
+  KeyN: { dx: 1, dz: 1 },
+  Numpad3: { dx: 1, dz: 1 },
 };
+
+const HELD_ORDER = [
+  "KeyW",
+  "ArrowUp",
+  "KeyK",
+  "Numpad8",
+  "KeyS",
+  "ArrowDown",
+  "KeyJ",
+  "Numpad2",
+  "KeyA",
+  "ArrowLeft",
+  "KeyH",
+  "Numpad4",
+  "KeyD",
+  "ArrowRight",
+  "KeyL",
+  "Numpad6",
+  "KeyY",
+  "Numpad7",
+  "KeyU",
+  "Numpad9",
+  "KeyB",
+  "Numpad1",
+  "KeyN",
+  "Numpad3",
+];
+
+export function dirFromCode(code: string): { dx: number; dz: number } | null {
+  return KEY_DIRS[code] ?? null;
+}
 
 export function createPlayer(
   font: Font,
@@ -108,6 +153,7 @@ export function createPlayer(
 
   const held = new Set<string>();
   const taps: PlayerIntent[] = [];
+  let enabled = true;
   let hop: Hop | null = null;
   let lunge: Player["lunge"] = null;
   let settleT = 1;
@@ -115,7 +161,7 @@ export function createPlayer(
   let gridZ = z;
 
   const onDown = (e: KeyboardEvent) => {
-    if (e.repeat) return;
+    if (!enabled || e.repeat) return;
     if (e.code in KEY_DIRS) {
       e.preventDefault();
       held.add(e.code);
@@ -124,19 +170,9 @@ export function createPlayer(
       if (taps.length > 1) taps.shift();
       return;
     }
-    if (e.code === "Space" || e.code === "Period") {
+    if (e.code === "Space" || (e.code === "Period" && !e.shiftKey)) {
       e.preventDefault();
       taps.push({ type: "wait" });
-      return;
-    }
-    if (e.code === "KeyQ") {
-      e.preventDefault();
-      taps.push({ type: "quaff" });
-      return;
-    }
-    if (e.code === "KeyR") {
-      e.preventDefault();
-      taps.push({ type: "restart" });
     }
   };
   const onUp = (e: KeyboardEvent) => {
@@ -146,17 +182,7 @@ export function createPlayer(
   window.addEventListener("keyup", onUp);
 
   const heldDir = (): { dx: number; dz: number } | null => {
-    const order = [
-      "KeyW",
-      "ArrowUp",
-      "KeyS",
-      "ArrowDown",
-      "KeyA",
-      "ArrowLeft",
-      "KeyD",
-      "ArrowRight",
-    ];
-    for (const code of order) {
+    for (const code of HELD_ORDER) {
       if (!held.has(code)) continue;
       return KEY_DIRS[code]!;
     }
@@ -164,11 +190,22 @@ export function createPlayer(
   };
 
   const consumeIntent = (): PlayerIntent | null => {
+    if (!enabled) return null;
     const tap = taps.shift();
     if (tap) return tap;
     const dir = heldDir();
     if (dir) return { type: "move", dx: dir.dx, dz: dir.dz };
     return null;
+  };
+
+  const clearIntents = () => {
+    held.clear();
+    taps.length = 0;
+  };
+
+  const setEnabled = (on: boolean) => {
+    enabled = on;
+    if (!on) clearIntents();
   };
 
   const startHop = (toX: number, toZ: number) => {
@@ -209,9 +246,7 @@ export function createPlayer(
     torch.intensity = reduced
       ? 5.5
       : 5.5 + Math.sin(time * 23) * 0.35 + Math.sin(time * 41) * 0.18;
-    bounce.intensity = reduced
-      ? 1.4
-      : 1.4 + Math.sin(time * 19) * 0.12;
+    bounce.intensity = reduced ? 1.4 : 1.4 + Math.sin(time * 19) * 0.12;
 
     let result: "landed" | "lungeHit" | "lungeDone" | "idle" | "busy" = "idle";
 
@@ -317,7 +352,9 @@ export function createPlayer(
     get busy() {
       return hop !== null || lunge !== null;
     },
+    setEnabled,
     consumeIntent,
+    clearIntents,
     startHop,
     startLunge,
     place,

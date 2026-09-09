@@ -15,12 +15,54 @@ export type ThemeColors = {
   title: number;
   potion: number;
   weapon: number;
+  armor: number;
+  food: number;
   gold: number;
   amulet: number;
+  bat: number;
+  snake: number;
+  thief: number;
+  look: number;
   sun: number;
   sky: number;
   ink: number;
 };
+
+export type ThemeColorKey = keyof ThemeColors;
+
+export const THEME_COLOR_KEYS: readonly ThemeColorKey[] = [
+  "player",
+  "goblin",
+  "rat",
+  "ogre",
+  "demon",
+  "bat",
+  "snake",
+  "thief",
+  "potion",
+  "weapon",
+  "armor",
+  "food",
+  "gold",
+  "amulet",
+  "look",
+  "floor",
+  "wall",
+  "door",
+  "water",
+  "stairs",
+  "title",
+  "sun",
+  "sky",
+  "ink",
+  "void",
+] as const;
+
+const KEY_SET = new Set<string>(THEME_COLOR_KEYS);
+
+export function isThemeColorKey(v: string): v is ThemeColorKey {
+  return KEY_SET.has(v);
+}
 
 export type Theme = {
   name: ThemeName;
@@ -43,8 +85,14 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     title: 0xf0dcc0,
     potion: 0x8aaa70,
     weapon: 0xd0b8a8,
+    armor: 0xa09080,
+    food: 0xc8a060,
     gold: 0xf0c878,
     amulet: 0xffcc55,
+    bat: 0x887868,
+    snake: 0x6a9a58,
+    thief: 0xb07858,
+    look: 0xffcc55,
     sun: 0xffecd4,
     sky: 0x6a5848,
     ink: 0xf0dcc0,
@@ -64,8 +112,14 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     title: 0xc8e8b8,
     potion: 0x7ad070,
     weapon: 0xa8c8a0,
+    armor: 0x6a8a68,
+    food: 0xa8c070,
     gold: 0xc8e878,
     amulet: 0xa8ff70,
+    bat: 0x4a7050,
+    snake: 0x58a848,
+    thief: 0x6a9a58,
+    look: 0xa8ff70,
     sun: 0xdcffc8,
     sky: 0x2a4a30,
     ink: 0xc8e8b8,
@@ -85,8 +139,14 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     title: 0xe4ecf4,
     potion: 0x6aa8c0,
     weapon: 0xc8d0d8,
+    armor: 0x8898a8,
+    food: 0xb8c8d0,
     gold: 0xe8f0f8,
     amulet: 0x9ee8ff,
+    bat: 0x6a7888,
+    snake: 0x5a98a0,
+    thief: 0x7a90a8,
+    look: 0x9ee8ff,
     sun: 0xf0f6ff,
     sky: 0x3a4858,
     ink: 0xe4ecf4,
@@ -106,8 +166,14 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     title: 0xf0c8b0,
     potion: 0xc07058,
     weapon: 0xd8a898,
+    armor: 0x986050,
+    food: 0xc89050,
     gold: 0xf0b060,
     amulet: 0xff7030,
+    bat: 0x805040,
+    snake: 0x708040,
+    thief: 0xa05840,
+    look: 0xff7030,
     sun: 0xffd8b8,
     sky: 0x5a3024,
     ink: 0xf0c8b0,
@@ -136,6 +202,9 @@ export function applyCssVars(): void {
   root.style.setProperty("--void", hexCss(c.void));
   root.style.setProperty("--ink", hexCss(c.ink));
   root.style.setProperty("--accent", hexCss(c.player));
+  root.style.setProperty("--edge", hexCss(c.wall));
+  root.style.setProperty("--panel", hexCss(c.void));
+  root.style.setProperty("--gold", hexCss(c.gold));
 }
 
 export function setTheme(name: ThemeName): Theme {

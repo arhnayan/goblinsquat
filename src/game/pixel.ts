@@ -73,7 +73,7 @@ export type PixelPass = {
 
 export function createPixelPass(renderer: WebGLRenderer): PixelPass {
   const INTERNAL_H = 432;
-  let enabled = false;
+  let enabled = true;
   const res = new Vector2(1, 1);
 
   const rt = new WebGLRenderTarget(1, 1, {

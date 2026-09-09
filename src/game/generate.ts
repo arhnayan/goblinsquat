@@ -6,34 +6,24 @@ import {
   type Dungeon,
 } from "./dungeon";
 import type { Rng } from "./rng";
+import {
+  guardianDef,
+  makeAmulet,
+  makeArmor,
+  makeFood,
+  makeGold,
+  makeMonsterFromKind,
+  makePotion,
+  makeWeapon,
+  pickArmor,
+  pickMonsterDef,
+  pickWeapon,
+  type Item,
+  type Monster,
+  type MonsterKind,
+} from "./catalog";
 
-export type MonsterKind = "r" | "g" | "O" | "&";
-
-export type ItemKind = "potion" | "weapon" | "gold" | "amulet";
-
-export type Item = {
-  id: number;
-  kind: ItemKind;
-  glyph: string;
-  x: number;
-  z: number;
-  weaponName?: string;
-  weaponAtk?: number;
-  gold?: number;
-};
-
-export type Monster = {
-  id: number;
-  kind: MonsterKind;
-  name: string;
-  glyph: string;
-  x: number;
-  z: number;
-  hp: number;
-  maxHp: number;
-  atk: number;
-  def: number;
-};
+export type { Item, Monster, MonsterKind };
 
 export type Floor = {
   depth: number;
@@ -44,17 +34,6 @@ export type Floor = {
 };
 
 type Room = { x: number; z: number; w: number; h: number };
-
-const WEAPONS = [
-  { name: "rusty shank", atk: 3 },
-  { name: "iron pipe", atk: 4 },
-  { name: "goblin cleaver", atk: 5 },
-] as const;
-
-let nextId = 1;
-export function allocId(): number {
-  return nextId++;
-}
 
 export function generateFloor(rng: Rng, depth: number): Floor {
   const width = MAP_WIDTH;
@@ -304,39 +283,31 @@ function scatterItems(
   items: Item[],
   farStair: Cell | null,
 ): void {
-  const potions = rng.range(1, depth >= 5 ? 2 : 2);
+  const potions = rng.range(1, 2);
   for (let i = 0; i < potions; i++) {
     const c = freeCell(tiles, rooms, rng, used);
     if (!c) break;
-    items.push({ id: allocId(), kind: "potion", glyph: "!", x: c.x, z: c.z });
+    items.push(makePotion(c.x, c.z));
+  }
+  const foodN = rng.range(1, 2);
+  for (let i = 0; i < foodN; i++) {
+    const c = freeCell(tiles, rooms, rng, used);
+    if (!c) break;
+    items.push(makeFood(c.x, c.z));
   }
   if (rng.chance(0.35 + depth * 0.05)) {
     const c = freeCell(tiles, rooms, rng, used);
-    if (c) {
-      const w = rng.pick(WEAPONS);
-      items.push({
-        id: allocId(),
-        kind: "weapon",
-        glyph: ")",
-        x: c.x,
-        z: c.z,
-        weaponName: w.name,
-        weaponAtk: w.atk,
-      });
-    }
+    if (c) items.push(makeWeapon(c.x, c.z, pickWeapon(depth, rng)));
+  }
+  if (rng.chance(0.22 + depth * 0.04)) {
+    const c = freeCell(tiles, rooms, rng, used);
+    if (c) items.push(makeArmor(c.x, c.z, pickArmor(depth, rng)));
   }
   const goldN = rng.range(2, 5);
   for (let i = 0; i < goldN; i++) {
     const c = freeCell(tiles, rooms, rng, used);
     if (!c) break;
-    items.push({
-      id: allocId(),
-      kind: "gold",
-      glyph: "$",
-      x: c.x,
-      z: c.z,
-      gold: rng.range(3, 12),
-    });
+    items.push(makeGold(c.x, c.z, rng.range(3, 12)));
   }
   if (depth === MAX_DEPTH) {
     const vault = rooms[rooms.length - 1];
@@ -345,7 +316,7 @@ function scatterItems(
       (farStair ? { x: farStair.x + 1, z: farStair.z } : null);
     if (c) {
       used.add(`${c.x},${c.z}`);
-      items.push({ id: allocId(), kind: "amulet", glyph: "*", x: c.x, z: c.z });
+      items.push(makeAmulet(c.x, c.z));
     }
   }
 }
@@ -371,9 +342,7 @@ function scatterMonsters(
     if (c) {
       monsters.push(makeMonster(rng, depth, c.x, c.z, true));
     } else if (stairsDown) {
-      const gx = stairsDown.x;
-      const gz = stairsDown.z;
-      monsters.push(makeMonster(rng, depth, gx, gz, true));
+      monsters.push(makeMonster(rng, depth, stairsDown.x, stairsDown.z, true));
     }
   }
 }
@@ -385,58 +354,6 @@ export function makeMonster(
   z: number,
   guardian: boolean,
 ): Monster {
-  if (guardian) {
-    return {
-      id: allocId(),
-      kind: "&",
-      name: "squat-demon",
-      glyph: "&",
-      x,
-      z,
-      hp: 22,
-      maxHp: 22,
-      atk: 5,
-      def: 1,
-    };
-  }
-  const kind = pickKind(rng, depth);
-  const stats = monsterStats(kind);
-  return { id: allocId(), ...stats, x, z };
-}
-
-function pickKind(rng: Rng, depth: number): MonsterKind {
-  if (depth >= 8) return rng.chance(0.4) ? "&" : rng.chance(0.5) ? "O" : "g";
-  if (depth >= 6) return rng.chance(0.45) ? "O" : "g";
-  if (depth >= 4) return rng.chance(0.3) ? "O" : rng.chance(0.7) ? "g" : "r";
-  if (depth >= 2) return rng.chance(0.55) ? "g" : "r";
-  return rng.chance(0.75) ? "r" : "g";
-}
-
-function monsterStats(kind: MonsterKind) {
-  if (kind === "r") {
-    return { kind, name: "rat", glyph: "r", hp: 3, maxHp: 3, atk: 1, def: 0 };
-  }
-  if (kind === "g") {
-    return {
-      kind,
-      name: "goblin",
-      glyph: "g",
-      hp: 6,
-      maxHp: 6,
-      atk: 2,
-      def: 0,
-    };
-  }
-  if (kind === "O") {
-    return { kind, name: "ogre", glyph: "O", hp: 14, maxHp: 14, atk: 4, def: 1 };
-  }
-  return {
-    kind: "&" as const,
-    name: "squat-demon",
-    glyph: "&",
-    hp: 18,
-    maxHp: 18,
-    atk: 5,
-    def: 1,
-  };
+  if (guardian) return makeMonsterFromKind(guardianDef().id, x, z);
+  return makeMonsterFromKind(pickMonsterDef(depth, rng).id, x, z);
 }

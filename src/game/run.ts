@@ -1,6 +1,7 @@
 import { createRng, type Rng } from "./rng";
 import { generateFloor, type Floor } from "./generate";
 import { MAX_DEPTH } from "./dungeon";
+import { UNARMED_ATK, type Item } from "./catalog";
 
 export type Run = {
   seed: number;
@@ -10,9 +11,12 @@ export type Run = {
   maxHp: number;
   atk: number;
   def: number;
-  weapon: string | null;
-  potions: number;
+  weaponId: number | null;
+  armorId: number | null;
+  pack: Item[];
   gold: number;
+  poison: number;
+  turns: number;
   hasAmulet: boolean;
   status: "play" | "dead" | "won";
   floors: Map<number, Floor>;
@@ -28,11 +32,14 @@ export function newRun(seed = Date.now() >>> 0): Run {
     depth: 1,
     hp: 12,
     maxHp: 12,
-    atk: 2,
+    atk: UNARMED_ATK,
     def: 0,
-    weapon: null,
-    potions: 0,
+    weaponId: null,
+    armorId: null,
+    pack: [],
     gold: 0,
+    poison: 0,
+    turns: 0,
     hasAmulet: false,
     status: "play",
     floors,
@@ -59,4 +66,17 @@ export function enterPos(
 
 export function canGoDeeper(run: Run): boolean {
   return run.depth < MAX_DEPTH;
+}
+
+export function parseSeed(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  if (!/^\d+$/.test(t)) return null;
+  return Number(t) >>> 0;
+}
+
+export function urlSeed(): number | null {
+  const s = new URLSearchParams(window.location.search).get("seed");
+  if (s == null || s === "") return null;
+  return parseSeed(s);
 }

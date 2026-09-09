@@ -1,3 +1,4 @@
+import { actorTileFromDef, monsterByGlyph } from "./catalog";
 import { getColors } from "./theme";
 
 export const CELL = 1.18;
@@ -42,6 +43,18 @@ export function setTile(dungeon: Dungeon, x: number, z: number, ch: string): voi
 
 export function isLetterWall(ch: string): boolean {
   return ch >= "A" && ch <= "Z";
+}
+
+export function describeTile(ch: string): string {
+  if (ch === ".") return "floor";
+  if (ch === "#") return "a wall";
+  if (ch === "+") return "a closed door";
+  if (ch === "~") return "water";
+  if (ch === ">") return "a staircase down";
+  if (ch === "<") return "a staircase up";
+  if (ch === " ") return "void";
+  if (isLetterWall(ch)) return "carved stone";
+  return "something";
 }
 
 export function isBlocked(ch: string): boolean {
@@ -137,6 +150,36 @@ export function tileStyle(ch: string): TileStyle {
       metalness: 0.28,
     };
   }
+  if (ch === "]") {
+    return {
+      color: PALETTE.armor,
+      yScale: 0.88,
+      sizeMul: 1,
+      emissive: 0,
+      roughness: 0.46,
+      metalness: 0.26,
+    };
+  }
+  if (ch === "%") {
+    return {
+      color: PALETTE.food,
+      yScale: 0.7,
+      sizeMul: 1,
+      emissive: 0,
+      roughness: 0.5,
+      metalness: 0.08,
+    };
+  }
+  if (ch === "_") {
+    return {
+      color: PALETTE.look,
+      yScale: 0.45,
+      sizeMul: 1.2,
+      emissive: PALETTE.look,
+      roughness: 0.4,
+      metalness: 0.1,
+    };
+  }
   if (ch === "$") {
     return {
       color: PALETTE.gold,
@@ -157,46 +200,6 @@ export function tileStyle(ch: string): TileStyle {
       metalness: 0.2,
     };
   }
-  if (ch === "r") {
-    return {
-      color: PALETTE.rat,
-      yScale: 0.72,
-      sizeMul: 1,
-      emissive: 0,
-      roughness: 0.6,
-      metalness: 0.08,
-    };
-  }
-  if (ch === "g") {
-    return {
-      color: PALETTE.goblin,
-      yScale: 1.0,
-      sizeMul: 1,
-      emissive: PALETTE.goblin,
-      roughness: 0.55,
-      metalness: 0.1,
-    };
-  }
-  if (ch === "O") {
-    return {
-      color: PALETTE.ogre,
-      yScale: 1.2,
-      sizeMul: 1.08,
-      emissive: 0,
-      roughness: 0.5,
-      metalness: 0.12,
-    };
-  }
-  if (ch === "&") {
-    return {
-      color: PALETTE.demon,
-      yScale: 1.12,
-      sizeMul: 1,
-      emissive: PALETTE.demon,
-      roughness: 0.48,
-      metalness: 0.14,
-    };
-  }
   if (ch === "@") {
     return {
       color: PALETTE.player,
@@ -207,6 +210,8 @@ export function tileStyle(ch: string): TileStyle {
       metalness: 0.12,
     };
   }
+  const actor = monsterByGlyph(ch);
+  if (actor) return actorTileFromDef(actor);
   if (isLetterWall(ch)) {
     return {
       color: PALETTE.title,
