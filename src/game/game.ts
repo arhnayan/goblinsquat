@@ -3,8 +3,10 @@ import type { OrthographicCamera, Scene } from "three";
 import {
   charAt,
   FOV_RADIUS,
+  isSlowTile,
   isWalkable,
   cellKey,
+  setFloorTheme,
   setTile,
   describeTile,
   worldPos,
@@ -17,19 +19,19 @@ import {
   disposeActorView,
   retintActor,
   setActorVisible,
+  startActorDeath,
   startActorHop,
   startActorLunge,
   updateActorView,
   type ActorView,
 } from "./actors";
-import { computeFov, markSeen } from "./fov";
-import { killDrop, rollDamage } from "./combat";
+import { computeFov, hasLos, markSeen } from "./fov";
+import { killDrop, rollDamage, rollStrike } from "./combat";
 import { type Floor, type Item, type Monster } from "./generate";
 import {
   aAn,
   letterIndex,
   monsterDef,
-  POISON_TURNS,
   woundedName,
 } from "./catalog";
 import {
@@ -44,6 +46,7 @@ import {
 import { isFormTarget } from "./dom";
 import {
   canStep,
+  chebyshev,
   isAdjacent,
   nextStepAway,
   nextStepToward,
@@ -53,10 +56,18 @@ import { enterPos, getFloor, newRun, parseSeed, urlSeed, type Run } from "./run"
 import { PLAY_HINT, type Hud } from "./hud";
 import { followIsoCamera, getHudMotion } from "./camera";
 import { formatScores, recordScore, runScore } from "./score";
+import {
+  applyStatus,
+  clearStatus,
+  hasAnyStatus,
+  tickStatuses,
+} from "./status";
+import { triggerTrap } from "./traps";
+import { canSell, sellPrice } from "./shop";
 
 type Occ = { kind: "player" } | { kind: "monster"; id: number };
 type Phase = "idle" | "playerAnim" | "enemies" | "over";
-type Mode = "title" | "play" | "look" | "inventory" | "help" | "over";
+type Mode = "title" | "play" | "look" | "inventory" | "shop" | "help" | "over";
 
 export type Game = {
   player: Player;
@@ -89,6 +100,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   let lookView: ActorView | null = null;
   let restDelay = 0;
   let seedTyped = false;
+  let extraEnemyTurns = 0;
 
   const occKey = (x: number, z: number) => cellKey(x, z);
 
@@ -156,10 +168,12 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   function loadFloor(depth: number, via: "start" | "down" | "up"): void {
     floorLock = true;
     resting = false;
+    extraEnemyTurns = 0;
     if (world) world.dispose();
     disposeViews();
     run.depth = depth;
     floor = getFloor(run, depth);
+    setFloorTheme(floor.themeId);
     world = buildGlyphWorld(font, floor.dungeon, scene);
     const pos = enterPos(floor, via);
     player.place(pos.x, pos.z);
@@ -206,6 +220,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     hud.setLook(null);
     run = newRun(seed);
     floor = run.floors.get(1)!;
+    setFloorTheme(floor.themeId);
     world = buildGlyphWorld(font, floor.dungeon, scene);
     player = createPlayer(font, floor.dungeon.spawn.x, floor.dungeon.spawn.z, scene);
     spawnViews();
@@ -255,15 +270,12 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   function spendTurn(): boolean {
     if (run.status !== "play") return false;
     run.turns += 1;
-    if (run.poison > 0) {
-      run.hp -= 1;
-      run.poison -= 1;
-      hud.log(run.poison > 0 ? "the poison burns" : "the poison fades");
-      hud.refresh(run);
-      if (run.hp <= 0) {
-        die();
-        return false;
-      }
+    const logs = tickStatuses(run);
+    for (const msg of logs) hud.log(msg);
+    if (logs.length) hud.refresh(run);
+    if (run.hp <= 0) {
+      die();
+      return false;
     }
     return true;
   }
@@ -366,20 +378,51 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
         );
       } else hud.log("a staircase up. press < to climb");
     }
+    if (merchantBeside()) hud.log("a merchant. press enter to trade");
+  }
+
+  function merchantBeside(): boolean {
+    const dirs = [
+      { x: 1, z: 0 },
+      { x: -1, z: 0 },
+      { x: 0, z: 1 },
+      { x: 0, z: -1 },
+      { x: 1, z: 1 },
+      { x: 1, z: -1 },
+      { x: -1, z: 1 },
+      { x: -1, z: -1 },
+    ];
+    for (const d of dirs) {
+      if (charAt(floor.dungeon, player.gridX + d.x, player.gridZ + d.z) === "M") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function killMonster(m: Monster, explode: boolean, dx = 0, dz = 0): void {
+    hud.log(explode ? `the ${m.name} shatters` : `the ${m.name} dies`);
+    occ.delete(occKey(m.x, m.z));
+    const v = monsterViews.get(m.id);
+    if (v) startActorDeath(v, scene, explode, dx, dz, reduced);
+    if (explode) world.punchFloor(m.x, m.z);
+    const drop = killDrop(run.rng, m);
+    if (drop) placeItem(drop, m.x, m.z);
   }
 
   function hitMonster(m: Monster): void {
-    const dmg = rollDamage(run.rng, run.atk, m.def);
-    m.hp -= dmg;
+    const full = m.hp >= m.maxHp;
+    const strike = rollStrike(run.rng, run.atk, m.def);
+    m.hp -= strike.dmg;
     m.awake = true;
-    hud.log(`you hit the ${woundedName(m)} (${dmg})`);
+    hud.log(
+      strike.crit
+        ? `you crit the ${woundedName(m)} (${strike.dmg})`
+        : `you hit the ${woundedName(m)} (${strike.dmg})`,
+    );
     if (m.hp <= 0) {
-      hud.log(`the ${m.name} dies`);
-      occ.delete(occKey(m.x, m.z));
-      const v = monsterViews.get(m.id);
-      if (v) v.dying = 0;
-      const drop = killDrop(run.rng, m);
-      if (drop) placeItem(drop, m.x, m.z);
+      const explode = full || strike.crit;
+      killMonster(m, explode, player.lunge?.dx ?? 0, player.lunge?.dz ?? 0);
     }
     hud.refresh(run);
   }
@@ -391,8 +434,16 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     run.hp -= dmg;
     hud.log(`the ${m.name} hits you (${dmg})`);
     if (def.poison) {
-      run.poison = Math.max(run.poison, POISON_TURNS);
-      hud.log("you are poisoned");
+      const msg = applyStatus(run, "poison");
+      if (msg) hud.log(msg);
+    }
+    if (def.bleed) {
+      const msg = applyStatus(run, "bleed");
+      if (msg) hud.log(msg);
+    }
+    if (def.burns) {
+      const msg = applyStatus(run, "burn");
+      if (msg) hud.log(msg);
     }
     hud.refresh(run);
     if (run.hp <= 0) die();
@@ -489,13 +540,85 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
 
   function closeInventory(): void {
     if (mode !== "inventory") {
-      hud.hidePack();
+      if (mode !== "shop") hud.hidePack();
       return;
     }
     mode = "play";
     hud.hidePack();
     hud.setHint(PLAY_HINT);
     syncInput();
+  }
+
+  function openShop(): void {
+    if (mode !== "play" || phase !== "idle" || run.status !== "play") return;
+    if (!merchantBeside()) return;
+    if (!floor.shop) {
+      hud.log("the stall is empty");
+      return;
+    }
+    cancelRest(true);
+    mode = "shop";
+    hud.showShop(run, floor.shop);
+    player.setEnabled(false);
+  }
+
+  function closeShop(silent = false): void {
+    if (mode !== "shop") return;
+    mode = "play";
+    hud.hidePack();
+    hud.setHint(PLAY_HINT);
+    if (!silent) hud.log("you step back from the stall");
+    syncInput();
+  }
+
+  function buyOffer(index: number): void {
+    if (mode !== "shop" || phase !== "idle" || run.status !== "play") return;
+    const shop = floor.shop;
+    if (!shop) return;
+    const offer = shop.offers[index];
+    if (!offer) {
+      hud.log("nothing there");
+      return;
+    }
+    if (run.gold < offer.price) {
+      hud.log("not enough gold");
+      return;
+    }
+    if (packFull(run)) {
+      hud.log("your pack is full");
+      return;
+    }
+    run.gold -= offer.price;
+    shop.offers.splice(index, 1);
+    addToPack(run, offer.item);
+    hud.log(`you buy ${aAn(offer.item.name)} for $${offer.price}`);
+    hud.showShop(run, shop);
+    hud.refresh(run);
+    if (!spendTurn()) return;
+    beginEnemyTurn();
+  }
+
+  function sellOffer(index: number): void {
+    if (mode !== "shop" || phase !== "idle" || run.status !== "play") return;
+    const shop = floor.shop;
+    if (!shop) return;
+    const it = run.pack[index];
+    if (!it) {
+      hud.log("nothing there");
+      return;
+    }
+    if (!canSell(it)) {
+      hud.log("they will not buy that");
+      return;
+    }
+    const price = sellPrice(it);
+    takeFromPack(run, index);
+    run.gold += price;
+    hud.log(`you sell ${aAn(it.name)} for $${price}`);
+    hud.showShop(run, shop);
+    hud.refresh(run);
+    if (!spendTurn()) return;
+    beginEnemyTurn();
   }
 
   function lookDescribe(x: number, z: number): string {
@@ -566,7 +689,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     } else {
       cancelRest(true);
     }
-    closeInventory();
+    if (mode === "inventory" || mode === "shop") hud.hidePack();
+    else closeInventory();
     mode = "help";
     hud.showHelp();
     player.setEnabled(false);
@@ -592,6 +716,13 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       player.setEnabled(false);
       return;
     }
+    if (helpFrom === "shop") {
+      mode = "shop";
+      hud.overlay(null);
+      if (floor.shop) hud.showShop(run, floor.shop);
+      player.setEnabled(false);
+      return;
+    }
     if (helpFrom === "look") {
       mode = "look";
       hud.overlay(null);
@@ -607,7 +738,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
 
   function startRest(): void {
     if (mode !== "play" || phase !== "idle" || run.status !== "play") return;
-    if (run.hp >= run.maxHp && run.poison <= 0) {
+    if (run.hp >= run.maxHp && !hasAnyStatus(run)) {
       hud.log("you don't need to rest");
       return;
     }
@@ -635,7 +766,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       syncInput();
       return;
     }
-    if (run.hp >= run.maxHp && run.poison <= 0) {
+    if (run.hp >= run.maxHp && !hasAnyStatus(run)) {
       resting = false;
       hud.log("you feel rested");
       syncInput();
@@ -708,6 +839,20 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
         continue;
       }
 
+      const dist = chebyshev(m.x, m.z, px, pz);
+      if (
+        def.ranged &&
+        !adj &&
+        !shouldFlee &&
+        dist <= def.range &&
+        hasLos(floor.dungeon, m.x, m.z, px, pz) &&
+        !(def.erratic && run.rng.chance(0.5))
+      ) {
+        startActorLunge(view, Math.sign(px - m.x), Math.sign(pz - m.z));
+        any = true;
+        continue;
+      }
+
       let step = shouldFlee
         ? nextStepAway(floor.dungeon, m.x, m.z, px, pz, blocked, opts)
         : def.erratic && run.rng.chance(0.5)
@@ -741,11 +886,19 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       any = true;
     }
 
-    if (!any) {
-      refreshFov();
-      phase = "idle";
-      if (mode === "play" && run.status === "play") player.setEnabled(true);
+    if (!any) finishEnemyTurn();
+  }
+
+  function finishEnemyTurn(): void {
+    refreshFov();
+    if (extraEnemyTurns > 0 && run.status === "play") {
+      extraEnemyTurns -= 1;
+      if (!spendTurn()) return;
+      beginEnemyTurn();
+      return;
     }
+    phase = "idle";
+    if (mode === "play" && run.status === "play") player.setEnabled(true);
   }
 
   function handleMoveOrWait(intent: PlayerIntent): void {
@@ -760,6 +913,15 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     const nz = player.gridZ + intent.dz;
     const ch = charAt(floor.dungeon, nx, nz);
     const foe = monsterAt(nx, nz);
+    if (intent.type === "thrust") {
+      if (!spendTurn()) return;
+      pendingHit = foe;
+      player.startLunge(intent.dx, intent.dz);
+      phase = "playerAnim";
+      player.setEnabled(false);
+      if (!foe) hud.log("you thrust at air");
+      return;
+    }
     if (foe) {
       if (!spendTurn()) return;
       pendingHit = foe;
@@ -779,11 +941,56 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     if (!canStep(floor.dungeon, player.gridX, player.gridZ, nx, nz)) return;
     if (occ.has(occKey(nx, nz))) return;
     if (!spendTurn()) return;
+    if (isSlowTile(ch)) extraEnemyTurns += 1;
     occ.delete(occKey(player.gridX, player.gridZ));
     occ.set(occKey(nx, nz), { kind: "player" });
     player.startHop(nx, nz);
     phase = "playerAnim";
     player.setEnabled(false);
+  }
+
+  function afterPlayerLand(): void {
+    const x = player.gridX;
+    const z = player.gridZ;
+    const ch = charAt(floor.dungeon, x, z);
+    const trap = triggerTrap(floor.dungeon, x, z, run.rng);
+    if (trap) {
+      world.punchFloor(x, z);
+      run.hp -= trap.dmg;
+      hud.log(trap.log);
+      if (trap.status) {
+        const msg = applyStatus(run, trap.status, trap.turns);
+        if (msg) hud.log(msg);
+      }
+    } else if (ch === "=") {
+      run.hp -= 1;
+      hud.log("embers sear you");
+      const msg = applyStatus(run, "burn");
+      if (msg) hud.log(msg);
+    } else if (ch === "~") {
+      hud.log("you wade through water");
+      if (clearStatus(run, "burn")) hud.log("the water douses the fire");
+    } else if (ch === '"') {
+      hud.log("you scramble over rubble");
+    }
+    hud.refresh(run);
+    if (run.hp <= 0) die();
+  }
+
+  function hurtMonsterOnTile(m: Monster): void {
+    if (m.hp <= 0) return;
+    const ch = charAt(floor.dungeon, m.x, m.z);
+    const trap = triggerTrap(floor.dungeon, m.x, m.z, run.rng);
+    let dmg = 0;
+    if (trap) {
+      dmg = trap.kind === "gas" ? 2 : trap.dmg;
+      hud.log(`the ${m.name} ${trap.monsterLog}`);
+    } else if (ch === "=") {
+      dmg = 1;
+    }
+    if (dmg <= 0) return;
+    m.hp -= dmg;
+    if (m.hp <= 0) killMonster(m, false);
   }
 
   function handlePlayIntent(): void {
@@ -803,7 +1010,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
 
   function enemiesBusy(): boolean {
     for (const v of monsterViews.values()) {
-      if (v.hop || v.lunge || v.dying !== null) return true;
+      if (v.hop || v.lunge) return true;
     }
     return false;
   }
@@ -873,6 +1080,25 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       return;
     }
 
+    if (mode === "shop") {
+      if (e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter") {
+        e.preventDefault();
+        closeShop();
+        return;
+      }
+      if (e.key === "?" || (e.code === "Slash" && e.shiftKey)) {
+        e.preventDefault();
+        openHelp();
+        return;
+      }
+      const idx = letterIndex(e.code);
+      if (idx === null) return;
+      e.preventDefault();
+      if (e.shiftKey) sellOffer(idx);
+      else buyOffer(idx);
+      return;
+    }
+
     if (mode === "inventory") {
       if (e.code === "KeyI" || e.code === "Escape") {
         e.preventDefault();
@@ -924,6 +1150,11 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       return;
     }
     if (phase !== "idle" || player.busy) return;
+    if (e.code === "Enter" || e.code === "NumpadEnter") {
+      e.preventDefault();
+      openShop();
+      return;
+    }
     if (e.code === "KeyI") {
       e.preventDefault();
       openInventory();
@@ -968,7 +1199,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       startNew(parseSeed(seed) ?? undefined, true);
     },
     onHelp: () => {
-      if (mode === "play" || mode === "title" || mode === "over" || mode === "inventory" || mode === "look") {
+      if (mode === "play" || mode === "title" || mode === "over" || mode === "inventory" || mode === "look" || mode === "shop") {
         openHelp();
       }
     },
@@ -978,6 +1209,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     },
     onPackUse: applyPack,
     onPackDrop: dropPack,
+    onShopBuy: buyOffer,
+    onShopSell: sellOffer,
   });
 
   window.addEventListener("keydown", onKey);
@@ -1005,9 +1238,12 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       }
       if (pev === "landed") {
         world.punchFloor(player.gridX, player.gridZ);
-        pickupAt(player.gridX, player.gridZ);
-        underfoot();
-        if (run.status === "play") beginEnemyTurn();
+        afterPlayerLand();
+        if (run.status === "play") {
+          pickupAt(player.gridX, player.gridZ);
+          underfoot();
+          beginEnemyTurn();
+        }
       } else if (pev === "lungeDone") {
         pendingHit = null;
         if (run.status === "play") beginEnemyTurn();
@@ -1019,6 +1255,10 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       if (ev === "lungeHit") {
         const m = floor.monsters.find((mm) => mm.id === id);
         if (m && m.hp > 0) hitPlayer(m);
+      }
+      if (ev === "landed") {
+        const m = floor.monsters.find((mm) => mm.id === id);
+        if (m && m.hp > 0) hurtMonsterOnTile(m);
       }
       if (ev === "dead") {
         disposeActorView(v, scene);
@@ -1034,9 +1274,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     }
 
     if (phase === "enemies" && run.status === "play" && !enemiesBusy()) {
-      refreshFov();
-      phase = "idle";
-      if (mode === "play") player.setEnabled(true);
+      finishEnemyTurn();
     }
 
     followIsoCamera(camera, player.follow.position, dt);

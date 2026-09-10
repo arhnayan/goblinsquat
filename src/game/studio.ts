@@ -358,6 +358,7 @@ export function mountStudio(root: HTMLElement): void {
         m.maxDepth = v <= 0 ? undefined : v;
       })),
       field("weight", numInput(m.weight, 0, 999, (v) => (m.weight = v))),
+      field("range", numInput(m.range, 1, 8, (v) => (m.range = v))),
       field("y scale", numInput(m.yScale, 0.3, 2.5, (v) => (m.yScale = v), 0.05)),
       field("size", numInput(m.sizeMul, 0.5, 2, (v) => (m.sizeMul = v), 0.05)),
     );
@@ -366,6 +367,9 @@ export function mountStudio(root: HTMLElement): void {
       check("glow", m.glow, (v) => (m.glow = v)),
       check("opens doors", m.canOpenDoors, (v) => (m.canOpenDoors = v)),
       check("poison", m.poison, (v) => (m.poison = v)),
+      check("bleed", m.bleed, (v) => (m.bleed = v)),
+      check("burns", m.burns, (v) => (m.burns = v)),
+      check("ranged", m.ranged, (v) => (m.ranged = v)),
       check("steals", m.steals, (v) => (m.steals = v)),
       check("erratic", m.erratic, (v) => (m.erratic = v)),
       check("flees", m.flees, (v) => (m.flees = v)),
@@ -392,6 +396,7 @@ export function mountStudio(root: HTMLElement): void {
       })),
       field("atk", numInput(w.atk, 0, 99, (v) => (w.atk = v))),
       field("min depth", numInput(w.minDepth, 1, 99, (v) => (w.minDepth = v))),
+      field("price", numInput(w.price ?? w.atk * 8, 0, 999, (v) => (w.price = v))),
     );
     return wrap;
   };
@@ -408,6 +413,7 @@ export function mountStudio(root: HTMLElement): void {
       })),
       field("def", numInput(a.def, 0, 99, (v) => (a.def = v))),
       field("min depth", numInput(a.minDepth, 1, 99, (v) => (a.minDepth = v))),
+      field("price", numInput(a.price ?? a.def * 14, 0, 999, (v) => (a.price = v))),
     );
     return wrap;
   };
@@ -416,7 +422,8 @@ export function mountStudio(root: HTMLElement): void {
     const wrap = el("form", "form-grid vitals-form");
     wrap.addEventListener("submit", (e) => e.preventDefault());
     const intro = el("p", "studio-sub");
-    intro.textContent = "heal amounts for potions and rations.";
+    intro.textContent =
+      "heal amounts for potions and rations. tile traps (spikes, gas, rubble, embers) are generated in code, not this catalog.";
     wrap.append(intro);
     wrap.append(
       field("potion heal", numInput(draft.vitals.potionHeal, 1, 99, (v) => {

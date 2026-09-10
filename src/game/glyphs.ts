@@ -182,10 +182,11 @@ export function buildGlyphWorld(
     for (let x = 0; x < dungeon.width; x++) {
       const ch = charAt(dungeon, x, z);
       if (!shouldDraw(ch)) continue;
-      let list = groups.get(ch);
+      const draw = ch === "^" || ch === "'" ? "." : ch;
+      let list = groups.get(draw);
       if (!list) {
         list = [];
-        groups.set(ch, list);
+        groups.set(draw, list);
       }
       list.push({ gx: x, gz: z });
     }
@@ -250,6 +251,7 @@ export function buildGlyphWorld(
   }
 
   const waterMat = materials.get("~");
+  const emberMat = materials.get("=");
 
   let booting = !reduced;
   let spawnX = dungeon.spawn.x;
@@ -290,7 +292,7 @@ export function buildGlyphWorld(
       for (const inst of instances) {
         const vis = visAt(inst.gx, inst.gz);
         if (vis === "hidden") continue;
-        if (inst.char === "~" && vis === "visible") {
+        if ((inst.char === "~" || inst.char === "=") && vis === "visible") {
           const y = inst.baseY + Math.sin(time * 1.7 + inst.phase) * 0.055;
           writeInstance(inst, y, FACE_YAW, vis);
           matrixDirty = true;
@@ -318,6 +320,10 @@ export function buildGlyphWorld(
       const pulse = 0.5 + 0.5 * Math.sin(time * 1.35);
       waterMat.color.setHex(0xffffff);
       waterMat.emissiveIntensity = 0.25 + pulse * 0.2;
+    }
+    if (emberMat) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 2.1);
+      emberMat.emissiveIntensity = 0.4 + pulse * 0.35;
     }
 
     if (matrixDirty) {
@@ -398,6 +404,10 @@ export function buildGlyphWorld(
     if (waterMat) {
       const st = tileStyle("~");
       waterMat.emissive.setHex(st.emissive);
+    }
+    if (emberMat) {
+      const st = tileStyle("=");
+      emberMat.emissive.setHex(st.emissive);
     }
   };
 

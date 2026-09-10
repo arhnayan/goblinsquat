@@ -8,6 +8,7 @@ import {
   type ItemKind,
 } from "./catalog";
 import type { Run } from "./run";
+import { clearStatuses, hasAnyStatus } from "./status";
 
 export function syncStats(run: Run): void {
   const w = run.pack.find((i) => i.id === run.weaponId);
@@ -45,12 +46,12 @@ export function usePackItem(run: Run, index: number): string {
   if (!it) return "nothing there";
   if (it.kind === "potion") {
     run.pack.splice(index, 1);
-    const poisoned = run.poison > 0;
-    run.poison = 0;
-    if (run.hp >= run.maxHp && !poisoned) return "the potion does nothing";
+    const afflicted = hasAnyStatus(run);
+    clearStatuses(run);
+    if (run.hp >= run.maxHp && !afflicted) return "the potion does nothing";
     run.hp = Math.min(run.maxHp, run.hp + potionHeal());
-    if (poisoned && run.hp >= run.maxHp) return "the poison fades";
-    if (poisoned) return "you feel better, and the poison fades";
+    if (afflicted && run.hp >= run.maxHp) return "your blood clears";
+    if (afflicted) return "you feel better, and the sickness fades";
     return "you feel better";
   }
   if (it.kind === "food") {

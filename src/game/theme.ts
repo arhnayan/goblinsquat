@@ -22,6 +22,8 @@ export type ThemeColors = {
   bat: number;
   snake: number;
   thief: number;
+  slinger: number;
+  beetle: number;
   look: number;
   sun: number;
   sky: number;
@@ -39,6 +41,8 @@ export const THEME_COLOR_KEYS: readonly ThemeColorKey[] = [
   "bat",
   "snake",
   "thief",
+  "slinger",
+  "beetle",
   "potion",
   "weapon",
   "armor",
@@ -92,6 +96,8 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     bat: 0x887868,
     snake: 0x6a9a58,
     thief: 0xb07858,
+    slinger: 0xc4a070,
+    beetle: 0xd06038,
     look: 0xffcc55,
     sun: 0xffecd4,
     sky: 0x6a5848,
@@ -119,6 +125,8 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     bat: 0x4a7050,
     snake: 0x58a848,
     thief: 0x6a9a58,
+    slinger: 0x88b868,
+    beetle: 0xc87840,
     look: 0xa8ff70,
     sun: 0xdcffc8,
     sky: 0x2a4a30,
@@ -146,6 +154,8 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     bat: 0x6a7888,
     snake: 0x5a98a0,
     thief: 0x7a90a8,
+    slinger: 0x90b0c0,
+    beetle: 0xc07058,
     look: 0x9ee8ff,
     sun: 0xf0f6ff,
     sky: 0x3a4858,
@@ -173,6 +183,8 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     bat: 0x805040,
     snake: 0x708040,
     thief: 0xa05840,
+    slinger: 0xc87850,
+    beetle: 0xff5828,
     look: 0xff7030,
     sun: 0xffd8b8,
     sky: 0x5a3024,

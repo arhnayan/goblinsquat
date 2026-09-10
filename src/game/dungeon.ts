@@ -7,6 +7,25 @@ export const FOV_RADIUS = 8;
 export const MAP_WIDTH = 40;
 export const MAP_HEIGHT = 24;
 
+export type FloorThemeId = "shallow" | "warrens" | "deep" | "vault";
+
+let floorTheme: FloorThemeId = "shallow";
+
+export function themeForDepth(depth: number): FloorThemeId {
+  if (depth <= 2) return "shallow";
+  if (depth <= 5) return "warrens";
+  if (depth <= 7) return "deep";
+  return "vault";
+}
+
+export function setFloorTheme(id: FloorThemeId): void {
+  floorTheme = id;
+}
+
+export function getFloorTheme(): FloorThemeId {
+  return floorTheme;
+}
+
 export function palette() {
   return getColors();
 }
@@ -41,9 +60,6 @@ export function setTile(dungeon: Dungeon, x: number, z: number, ch: string): voi
   dungeon.tiles[z][x] = ch;
 }
 
-export function isLetterWall(ch: string): boolean {
-  return ch >= "A" && ch <= "Z";
-}
 
 export function describeTile(ch: string): string {
   if (ch === ".") return "floor";
@@ -53,12 +69,24 @@ export function describeTile(ch: string): string {
   if (ch === ">") return "a staircase down";
   if (ch === "<") return "a staircase up";
   if (ch === " ") return "void";
+  if (ch === "^" || ch === "'") return "floor";
+  if (ch === '"') return "rubble";
+  if (ch === "=") return "embers";
+  if (ch === "M") return "a merchant";
   if (isLetterWall(ch)) return "carved stone";
   return "something";
 }
 
+export function isLetterWall(ch: string): boolean {
+  return ch >= "A" && ch <= "Z" && ch !== "M";
+}
+
 export function isBlocked(ch: string): boolean {
-  return ch === "#" || ch === "+" || ch === " " || isLetterWall(ch);
+  return ch === "#" || ch === "+" || ch === " " || ch === "M" || isLetterWall(ch);
+}
+
+export function isSlowTile(ch: string): boolean {
+  return ch === "~" || ch === '"';
 }
 
 export function isWalkable(dungeon: Dungeon, x: number, z: number): boolean {
@@ -78,11 +106,40 @@ export function cellKey(x: number, z: number): string {
   return `${x},${z}`;
 }
 
+function mixHex(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 255;
+  const ag = (a >> 8) & 255;
+  const ab = a & 255;
+  const br = (b >> 16) & 255;
+  const bg = (b >> 8) & 255;
+  const bb = b & 255;
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return (r << 16) | (g << 8) | bl;
+}
+
+function themedFloor(base: number): number {
+  const PALETTE = getColors();
+  if (floorTheme === "warrens") return mixHex(base, PALETTE.wall, 0.12);
+  if (floorTheme === "deep") return mixHex(base, PALETTE.demon, 0.18);
+  if (floorTheme === "vault") return mixHex(base, PALETTE.gold, 0.1);
+  return base;
+}
+
+function themedWall(base: number): number {
+  const PALETTE = getColors();
+  if (floorTheme === "warrens") return mixHex(base, PALETTE.void, 0.16);
+  if (floorTheme === "deep") return mixHex(base, PALETTE.demon, 0.22);
+  if (floorTheme === "vault") return mixHex(base, PALETTE.title, 0.12);
+  return base;
+}
+
 export function tileStyle(ch: string): TileStyle {
   const PALETTE = getColors();
-  if (ch === ".") {
+  if (ch === "." || ch === "^" || ch === "'") {
     return {
-      color: PALETTE.floor,
+      color: themedFloor(PALETTE.floor),
       yScale: 0.9,
       sizeMul: 2.15,
       emissive: 0,
@@ -92,7 +149,7 @@ export function tileStyle(ch: string): TileStyle {
   }
   if (ch === "#") {
     return {
-      color: PALETTE.wall,
+      color: themedWall(PALETTE.wall),
       yScale: 1.22,
       sizeMul: 1,
       emissive: 0,
@@ -118,6 +175,36 @@ export function tileStyle(ch: string): TileStyle {
       emissive: PALETTE.water,
       roughness: 0.28,
       metalness: 0.35,
+    };
+  }
+  if (ch === '"') {
+    return {
+      color: mixHex(themedFloor(PALETTE.floor), PALETTE.wall, 0.45),
+      yScale: 1.02,
+      sizeMul: 1.05,
+      emissive: 0,
+      roughness: 0.62,
+      metalness: 0.12,
+    };
+  }
+  if (ch === "=") {
+    return {
+      color: mixHex(PALETTE.stairs, PALETTE.demon, 0.35),
+      yScale: 0.52,
+      sizeMul: 1.12,
+      emissive: PALETTE.amulet,
+      roughness: 0.3,
+      metalness: 0.22,
+    };
+  }
+  if (ch === "M") {
+    return {
+      color: PALETTE.gold,
+      yScale: 1.14,
+      sizeMul: 1,
+      emissive: PALETTE.gold,
+      roughness: 0.4,
+      metalness: 0.2,
     };
   }
   if (ch === "<" || ch === ">") {

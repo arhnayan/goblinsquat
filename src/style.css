@@ -104,6 +104,14 @@ canvas {
   background: #8aaa70;
 }
 
+.hp-bar.is-burn .hp-seg.is-on {
+  background: #ff7030;
+}
+
+.hp-bar.is-bleed .hp-seg.is-on {
+  background: #c04040;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

@@ -4,15 +4,18 @@
     "foodHeal": 4
   },
   "weapons": [
-    { "id": "rusty-shank", "name": "rusty shank", "atk": 3, "minDepth": 1 },
-    { "id": "iron-pipe", "name": "iron pipe", "atk": 4, "minDepth": 1 },
-    { "id": "goblin-cleaver", "name": "goblin cleaver", "atk": 5, "minDepth": 3 },
-    { "id": "squat-maul", "name": "squat maul", "atk": 6, "minDepth": 6 }
+    { "id": "rusty-shank", "name": "rusty shank", "atk": 3, "minDepth": 1, "price": 16 },
+    { "id": "iron-pipe", "name": "iron pipe", "atk": 4, "minDepth": 1, "price": 22 },
+    { "id": "hook-knife", "name": "hook knife", "atk": 4, "minDepth": 2, "price": 28 },
+    { "id": "goblin-cleaver", "name": "goblin cleaver", "atk": 5, "minDepth": 3, "price": 36 },
+    { "id": "rust-chain", "name": "rust chain", "atk": 5, "minDepth": 4, "price": 42 },
+    { "id": "squat-maul", "name": "squat maul", "atk": 6, "minDepth": 6, "price": 52 }
   ],
   "armors": [
-    { "id": "leather", "name": "leather", "def": 1, "minDepth": 1 },
-    { "id": "mail", "name": "mail", "def": 2, "minDepth": 3 },
-    { "id": "plate", "name": "plate", "def": 3, "minDepth": 6 }
+    { "id": "quilted-coat", "name": "quilted coat", "def": 1, "minDepth": 1, "price": 18 },
+    { "id": "leather", "name": "leather", "def": 1, "minDepth": 1, "price": 14 },
+    { "id": "mail", "name": "mail", "def": 2, "minDepth": 3, "price": 28 },
+    { "id": "plate", "name": "plate", "def": 3, "minDepth": 6, "price": 44 }
   ],
   "monsters": [
     {
@@ -34,7 +37,11 @@
       "steals": false,
       "erratic": false,
       "flees": false,
-      "guardian": false
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3
     },
     {
       "id": "bat",
@@ -55,7 +62,11 @@
       "steals": false,
       "erratic": true,
       "flees": false,
-      "guardian": false
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3
     },
     {
       "id": "goblin",
@@ -75,7 +86,11 @@
       "steals": false,
       "erratic": false,
       "flees": true,
-      "guardian": false
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3
     },
     {
       "id": "snake",
@@ -96,7 +111,11 @@
       "steals": false,
       "erratic": false,
       "flees": false,
-      "guardian": false
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3
     },
     {
       "id": "thief",
@@ -116,7 +135,36 @@
       "steals": true,
       "erratic": false,
       "flees": true,
-      "guardian": false
+      "guardian": false,
+      "bleed": true,
+      "burns": false,
+      "ranged": false,
+      "range": 3
+    },
+    {
+      "id": "slinger",
+      "name": "slinger",
+      "glyph": "s",
+      "hp": 5,
+      "atk": 2,
+      "def": 0,
+      "minDepth": 3,
+      "maxDepth": 7,
+      "weight": 24,
+      "palette": "slinger",
+      "yScale": 0.92,
+      "sizeMul": 1,
+      "glow": false,
+      "canOpenDoors": true,
+      "poison": false,
+      "steals": false,
+      "erratic": true,
+      "flees": false,
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": true,
+      "range": 4
     },
     {
       "id": "ogre",
@@ -136,7 +184,35 @@
       "steals": false,
       "erratic": false,
       "flees": false,
-      "guardian": false
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3
+    },
+    {
+      "id": "fire-beetle",
+      "name": "fire-beetle",
+      "glyph": "f",
+      "hp": 6,
+      "atk": 2,
+      "def": 1,
+      "minDepth": 5,
+      "weight": 20,
+      "palette": "beetle",
+      "yScale": 0.65,
+      "sizeMul": 0.92,
+      "glow": true,
+      "canOpenDoors": false,
+      "poison": false,
+      "steals": false,
+      "erratic": false,
+      "flees": false,
+      "guardian": false,
+      "bleed": false,
+      "burns": true,
+      "ranged": false,
+      "range": 3
     },
     {
       "id": "squat-demon",
@@ -156,7 +232,11 @@
       "steals": false,
       "erratic": false,
       "flees": false,
-      "guardian": true
+      "guardian": true,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3
     }
   ]
 }

@@ -3,6 +3,8 @@ import type { HudMotion } from "./camera";
 import { getTheme } from "./theme";
 import { countKind, itemTag } from "./inventory";
 import { packLetter } from "./catalog";
+import { describeStatuses, hasStatus } from "./status";
+import { canSell, sellPrice, type ShopState } from "./shop";
 
 export type HudHooks = {
   onStart: (seed: string) => void;
@@ -10,6 +12,8 @@ export type HudHooks = {
   onSeedChange: (seed: string) => void;
   onPackUse: (index: number) => void;
   onPackDrop: (index: number) => void;
+  onShopBuy: (index: number) => void;
+  onShopSell: (index: number) => void;
 };
 
 export type Hud = {
@@ -20,6 +24,7 @@ export type Hud = {
   showHelp: () => void;
   showPack: (run: Run) => void;
   hidePack: () => void;
+  showShop: (run: Run, shop: ShopState) => void;
   setLook: (text: string | null) => void;
   setHint: (text: string) => void;
   clearLog: () => void;
@@ -36,16 +41,20 @@ type FloatPanel = {
   centered?: boolean;
 };
 
-const PLAY_HINT = "WASD/hjkl  . wait  z rest  i pack  x look  ? help  F pixel  C palette";
+const PLAY_HINT = "WASD/hjkl  v+dir thrust  . wait  z rest  i pack  enter shop  x look  ? help";
 
 const HELP = `GOBLINSQUAT
 WASD  arrows  hjkl  yubn  numpad  move
+v + direction  thrust (no step)
 . or space  wait
 z or 5  rest
 i  pack   letter uses   shift+letter drops
+enter  trade beside a merchant
 x  look
 q  quaff   e  eat
 >  descend   <  climb
+water and rubble cost extra turns
+embers burn   spikes and vents hide in the floor
 ?  help   R  title
 F  pixel   C  palette
 studio  /studio.html`;
@@ -118,7 +127,9 @@ export function createHud(): Hud {
     hpLabel.textContent = `HP ${run.hp}/${run.maxHp}`;
     const bar = document.createElement("div");
     bar.className = "hp-bar";
-    if (run.poison > 0) bar.classList.add("is-poison");
+    if (hasStatus(run, "poison")) bar.classList.add("is-poison");
+    if (hasStatus(run, "burn")) bar.classList.add("is-burn");
+    if (hasStatus(run, "bleed")) bar.classList.add("is-bleed");
     const segs = Math.max(1, run.maxHp);
     for (let i = 0; i < segs; i++) {
       const seg = document.createElement("i");
@@ -136,8 +147,10 @@ export function createHud(): Hud {
       chip(`$${run.gold}`, "gold"),
       chip(`p${countKind(run, "potion")}`),
     );
-    if (run.poison > 0) chips.append(chip(`psn${run.poison}`, "warn"));
     if (run.hasAmulet) chips.append(chip("* amulet", "gold"));
+    for (const s of describeStatuses(run)) {
+      chips.append(chip(`${s.kind} ${s.turns}`, "warn"));
+    }
     const w = run.pack.find((i) => i.id === run.weaponId);
     const a = run.pack.find((i) => i.id === run.armorId);
     if (w) chips.append(chip(w.name));
@@ -272,6 +285,69 @@ export function createHud(): Hud {
     packBox.replaceChildren();
   };
 
+  const showShop = (run: Run, shop: ShopState) => {
+    packBox.hidden = false;
+    packBox.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "pack-head";
+    head.textContent = `shop  $${run.gold}`;
+    packBox.append(head);
+    if (!shop.offers.length) {
+      const empty = document.createElement("p");
+      empty.className = "pack-empty";
+      empty.textContent = "sold out";
+      packBox.append(empty);
+    } else {
+      const list = document.createElement("ul");
+      list.className = "pack-list";
+      shop.offers.forEach((offer, i) => {
+        const row = document.createElement("li");
+        row.className = "pack-row";
+        const letter = document.createElement("kbd");
+        letter.textContent = packLetter(i);
+        const name = document.createElement("span");
+        name.textContent = `${offer.item.name}  $${offer.price}`;
+        row.append(letter, name);
+        row.addEventListener("click", () => hooks?.onShopBuy(i));
+        list.append(row);
+      });
+      packBox.append(list);
+    }
+    const sellHead = document.createElement("div");
+    sellHead.className = "pack-head";
+    sellHead.textContent = "sell";
+    packBox.append(sellHead);
+    if (run.pack.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "pack-empty";
+      empty.textContent = "nothing to pawn";
+      packBox.append(empty);
+    } else {
+      const list = document.createElement("ul");
+      list.className = "pack-list";
+      run.pack.forEach((it, i) => {
+        const row = document.createElement("li");
+        row.className = "pack-row";
+        const letter = document.createElement("kbd");
+        letter.textContent = packLetter(i);
+        const name = document.createElement("span");
+        const worth = canSell(it) ? `  $${sellPrice(it)}` : "";
+        name.textContent = `${it.name}${itemTag(run, it)}${worth}`;
+        row.append(letter, name);
+        row.addEventListener("click", (e) => {
+          if (e.shiftKey) hooks?.onShopSell(i);
+        });
+        list.append(row);
+      });
+      packBox.append(list);
+    }
+    const foot = document.createElement("p");
+    foot.className = "pack-foot";
+    foot.textContent = "letter buy  shift+letter sell  esc close";
+    packBox.append(foot);
+    hint.textContent = "letter buy  shift+letter sell  esc close";
+  };
+
   const setLook = (text: string | null) => {
     lookText = text;
     if (text) {
@@ -325,6 +401,7 @@ export function createHud(): Hud {
     showHelp,
     showPack,
     hidePack,
+    showShop,
     setLook,
     setHint,
     clearLog,

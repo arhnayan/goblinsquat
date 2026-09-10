@@ -23,6 +23,11 @@ export const RESERVED_GLYPHS = new Set([
   "$",
   "*",
   " ",
+  "^",
+  "'",
+  '"',
+  "=",
+  "M",
 ]);
 
 export type ItemKind = "potion" | "weapon" | "gold" | "amulet" | "armor" | "food";
@@ -37,6 +42,7 @@ export type Item = {
   weaponAtk?: number;
   armorDef?: number;
   gold?: number;
+  price?: number;
 };
 
 export type MonsterKind = string;
@@ -76,6 +82,10 @@ export type MonsterDef = {
   erratic: boolean;
   flees: boolean;
   guardian: boolean;
+  bleed: boolean;
+  burns: boolean;
+  ranged: boolean;
+  range: number;
 };
 
 export type WeaponDef = {
@@ -83,6 +93,7 @@ export type WeaponDef = {
   name: string;
   atk: number;
   minDepth: number;
+  price?: number;
 };
 
 export type ArmorDef = {
@@ -90,6 +101,7 @@ export type ArmorDef = {
   name: string;
   def: number;
   minDepth: number;
+  price?: number;
 };
 
 export type VitalsDef = {
@@ -267,6 +279,10 @@ export function blankMonster(taken: Set<string>): MonsterDef {
     erratic: false,
     flees: false,
     guardian: false,
+    bleed: false,
+    burns: false,
+    ranged: false,
+    range: 3,
   };
 }
 
@@ -276,6 +292,7 @@ export function blankWeapon(taken: Set<string>): WeaponDef {
     name: "blade",
     atk: 4,
     minDepth: 1,
+    price: 20,
   };
 }
 
@@ -285,6 +302,7 @@ export function blankArmor(taken: Set<string>): ArmorDef {
     name: "hide",
     def: 1,
     minDepth: 1,
+    price: 14,
   };
 }
 
@@ -313,6 +331,10 @@ function emptyCatalog(): CatalogData {
         erratic: false,
         flees: false,
         guardian: true,
+        bleed: false,
+        burns: false,
+        ranged: false,
+        range: 3,
       },
     ],
   };
@@ -336,6 +358,7 @@ function parseWeapon(raw: unknown): WeaponDef | null {
     name,
     atk: clampInt(o.atk, 0, 99, 3),
     minDepth: clampInt(o.minDepth, 1, 99, 1),
+    price: clampInt(o.price, 0, 999, (typeof o.atk === "number" ? o.atk : 3) * 8),
   };
 }
 
@@ -349,6 +372,7 @@ function parseArmor(raw: unknown): ArmorDef | null {
     name,
     def: clampInt(o.def, 0, 99, 1),
     minDepth: clampInt(o.minDepth, 1, 99, 1),
+    price: clampInt(o.price, 0, 999, (typeof o.def === "number" ? o.def : 1) * 14),
   };
 }
 
@@ -384,6 +408,10 @@ function parseMonster(raw: unknown): MonsterDef | null {
     erratic: bool(o.erratic),
     flees: bool(o.flees),
     guardian: bool(o.guardian),
+    bleed: bool(o.bleed),
+    burns: bool(o.burns),
+    ranged: bool(o.ranged),
+    range: clampInt(o.range, 1, 8, 3),
   };
 }
 
@@ -457,6 +485,7 @@ export function makeWeapon(x: number, z: number, w: WeaponDef): Item {
     x,
     z,
     weaponAtk: w.atk,
+    price: w.price ?? w.atk * 8,
   };
 }
 
@@ -469,6 +498,7 @@ export function makeArmor(x: number, z: number, a: ArmorDef): Item {
     x,
     z,
     armorDef: a.def,
+    price: a.price ?? a.def * 14,
   };
 }
 
@@ -499,6 +529,21 @@ export function pickMonsterDef(
     (d) => d.minDepth <= depth && (d.maxDepth == null || depth <= d.maxDepth),
   );
   const use = pool.length ? pool : all;
+  return pickWeighted(use, rng);
+}
+
+export function pickMonsterDefForNest(
+  depth: number,
+  rng: { next: () => number; pick: <T>(arr: readonly T[]) => T },
+): MonsterDef {
+  const all = current.monsters.filter(
+    (d) =>
+      !d.guardian &&
+      d.minDepth <= depth &&
+      (d.maxDepth == null || depth <= d.maxDepth),
+  );
+  const small = all.filter((d) => d.hp <= 7 && !d.ranged);
+  const use = small.length ? small : all.length ? all : current.monsters;
   return pickWeighted(use, rng);
 }
 

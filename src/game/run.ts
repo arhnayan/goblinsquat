@@ -2,6 +2,7 @@ import { createRng, type Rng } from "./rng";
 import { generateFloor, type Floor } from "./generate";
 import { MAX_DEPTH } from "./dungeon";
 import { UNARMED_ATK, type Item } from "./catalog";
+import type { Status } from "./status";
 
 export type Run = {
   seed: number;
@@ -15,9 +16,10 @@ export type Run = {
   armorId: number | null;
   pack: Item[];
   gold: number;
-  poison: number;
+  statuses: Status[];
   turns: number;
   hasAmulet: boolean;
+  shopSpawned: boolean;
   status: "play" | "dead" | "won";
   floors: Map<number, Floor>;
 };
@@ -25,7 +27,7 @@ export type Run = {
 export function newRun(seed = Date.now() >>> 0): Run {
   const rng = createRng(seed);
   const floors = new Map<number, Floor>();
-  floors.set(1, generateFloor(rng, 1));
+  floors.set(1, generateFloor(rng, 1, { allowShop: false }));
   return {
     seed,
     rng,
@@ -38,9 +40,10 @@ export function newRun(seed = Date.now() >>> 0): Run {
     armorId: null,
     pack: [],
     gold: 0,
-    poison: 0,
+    statuses: [],
     turns: 0,
     hasAmulet: false,
+    shopSpawned: false,
     status: "play",
     floors,
   };
@@ -49,7 +52,9 @@ export function newRun(seed = Date.now() >>> 0): Run {
 export function getFloor(run: Run, depth: number): Floor {
   let floor = run.floors.get(depth);
   if (!floor) {
-    floor = generateFloor(run.rng, depth);
+    const allowShop = !run.shopSpawned && depth >= 2 && depth <= 5;
+    floor = generateFloor(run.rng, depth, { allowShop });
+    if (floor.merchant) run.shopSpawned = true;
     run.floors.set(depth, floor);
   }
   return floor;

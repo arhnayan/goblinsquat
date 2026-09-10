@@ -21,6 +21,12 @@ import {
   volumeScaleXZ,
 } from "./anim";
 import { makeFitScale, makeGlyphGeometry } from "./glyphs";
+import {
+  burstGlyphDust,
+  disposeDustBurst,
+  updateDustBurst,
+  type DustBurst,
+} from "./dust";
 
 export type ActorView = HopRig & {
   id: number;
@@ -30,6 +36,7 @@ export type ActorView = HopRig & {
   lunge: { dx: number; dz: number; t: number; struck: boolean } | null;
   settleT: number;
   dying: number | null;
+  dust: DustBurst | null;
   gridX: number;
   gridZ: number;
   visible: boolean;
@@ -80,6 +87,7 @@ export function createActorView(
     lunge: null,
     settleT: 1,
     dying: null,
+    dust: null,
     gridX: x,
     gridZ: z,
     visible: true,
@@ -122,11 +130,10 @@ export function updateActorView(
   reduced: boolean,
 ): "landed" | "lungeHit" | "lungeDone" | "dead" | "busy" | "idle" {
   if (view.dying !== null) {
-    view.dying += dt / 0.22;
-    const t = Math.min(view.dying, 1);
-    view.squash.scale.set(1 + t * 0.3, Math.max(0.01, 1 - t), 1 + t * 0.3);
-    view.root.position.y = -t * 0.4;
-    if (t >= 1) return "dead";
+    if (!view.dust) return "dead";
+    const scene = view.root.parent as Scene | null;
+    if (!scene) return "dead";
+    if (updateDustBurst(view.dust, dt, scene)) return "dead";
     return "busy";
   }
 
@@ -187,6 +194,26 @@ export function updateActorView(
   return "idle";
 }
 
+export function startActorDeath(
+  view: ActorView,
+  scene: Scene,
+  explode: boolean,
+  hitDx: number,
+  hitDz: number,
+  reduced: boolean,
+): void {
+  view.hop = null;
+  view.lunge = null;
+  view.dying = 0;
+  view.mesh.visible = false;
+  if (view.dust) {
+    disposeDustBurst(view.dust, scene);
+    view.dust = null;
+  }
+  if (reduced) return;
+  view.dust = burstGlyphDust(view.mesh, scene, explode, view.glyph, hitDx, hitDz);
+}
+
 export function retintActor(view: ActorView): void {
   const style = tileStyle(view.glyph);
   const mat = view.mesh.material;
@@ -198,6 +225,10 @@ export function retintActor(view: ActorView): void {
 }
 
 export function disposeActorView(view: ActorView, scene: Scene): void {
+  if (view.dust) {
+    disposeDustBurst(view.dust, scene);
+    view.dust = null;
+  }
   scene.remove(view.root);
   view.mesh.geometry.dispose();
   const mat = view.mesh.material;

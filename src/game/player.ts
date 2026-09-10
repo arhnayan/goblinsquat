@@ -24,7 +24,10 @@ import {
 } from "./anim";
 import { makeFitScale, makeGlyphGeometry } from "./glyphs";
 
-export type PlayerIntent = { type: "move"; dx: number; dz: number } | { type: "wait" };
+export type PlayerIntent =
+  | { type: "move"; dx: number; dz: number }
+  | { type: "thrust"; dx: number; dz: number }
+  | { type: "wait" };
 
 export type Player = HopRig & {
   follow: Object3D;
@@ -159,14 +162,24 @@ export function createPlayer(
   let settleT = 1;
   let gridX = x;
   let gridZ = z;
+  let thrusting = false;
 
   const onDown = (e: KeyboardEvent) => {
     if (!enabled || e.repeat) return;
+    if (e.code === "KeyV") {
+      e.preventDefault();
+      thrusting = true;
+      return;
+    }
     if (e.code in KEY_DIRS) {
       e.preventDefault();
       held.add(e.code);
       const d = KEY_DIRS[e.code]!;
-      taps.push({ type: "move", dx: d.dx, dz: d.dz });
+      taps.push(
+        thrusting
+          ? { type: "thrust", dx: d.dx, dz: d.dz }
+          : { type: "move", dx: d.dx, dz: d.dz },
+      );
       if (taps.length > 1) taps.shift();
       return;
     }
@@ -177,6 +190,7 @@ export function createPlayer(
   };
   const onUp = (e: KeyboardEvent) => {
     held.delete(e.code);
+    if (e.code === "KeyV") thrusting = false;
   };
   window.addEventListener("keydown", onDown);
   window.addEventListener("keyup", onUp);
@@ -194,13 +208,18 @@ export function createPlayer(
     const tap = taps.shift();
     if (tap) return tap;
     const dir = heldDir();
-    if (dir) return { type: "move", dx: dir.dx, dz: dir.dz };
+    if (dir) {
+      return thrusting
+        ? { type: "thrust", dx: dir.dx, dz: dir.dz }
+        : { type: "move", dx: dir.dx, dz: dir.dz };
+    }
     return null;
   };
 
   const clearIntents = () => {
     held.clear();
     taps.length = 0;
+    thrusting = false;
   };
 
   const setEnabled = (on: boolean) => {
