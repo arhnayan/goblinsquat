@@ -3,6 +3,43 @@
     "potionHeal": 8,
     "foodHeal": 4
   },
+  "balance": {
+    "rarityCommonPriceMul": 1,
+    "rarityCommonAffixSlots": 0,
+    "rarityFine": { "weightBase": 14, "weightSlope": 3, "weightMin": 14, "weightMax": 46, "affixSlots": 1, "priceMul": 1.5 },
+    "rarityMastercraft": { "weightBase": 2, "weightSlope": 2, "weightMin": 2, "weightMax": 22, "affixSlots": 2, "priceMul": 2.4 },
+    "weaponAffixes": [
+      { "id": "heavy", "label": "heavy", "atkBonus": 1 },
+      { "id": "vampiric", "label": "vampiric", "proc": "lifesteal" },
+      { "id": "keen", "label": "keen", "proc": "keen" }
+    ],
+    "armorAffixes": [
+      { "id": "sturdy", "label": "sturdy", "defBonus": 1 },
+      { "id": "thorned", "label": "thorned", "proc": "thorns" },
+      { "id": "warded", "label": "warded", "proc": "wardStatus" }
+    ],
+    "potionAntidoteBase": 8,
+    "potionAntidoteSlope": 1.5,
+    "potionAntidoteMin": 8,
+    "potionAntidoteMax": 22,
+    "potionVigorBase": 2,
+    "potionVigorSlope": 1.5,
+    "potionVigorMin": 2,
+    "potionVigorMax": 18,
+    "eliteDepthOffset": 2,
+    "eliteChanceSlope": 0.035,
+    "eliteChanceCap": 0.25,
+    "eliteDropBoost": 1.6,
+    "eliteHpMul": 1.4,
+    "eliteAtkMul": 1.3,
+    "eliteDefBonus": 1,
+    "critChance": 0.18,
+    "shopOfferMin": 4,
+    "shopOfferMax": 6,
+    "shopSellMul": 0.4,
+    "shopSaleMul": 0.7,
+    "shopDepthPriceSlope": 0.15
+  },
   "weapons": [
     { "id": "rusty-shank", "name": "rusty shank", "atk": 3, "minDepth": 1, "price": 16 },
     { "id": "iron-pipe", "name": "iron pipe", "atk": 4, "minDepth": 1, "price": 22 },

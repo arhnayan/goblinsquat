@@ -613,6 +613,63 @@ textarea:focus {
 
 .vitals-form {
   max-width: 28rem;
+  grid-column: 1 / -1;
+}
+
+.wide-form {
+  grid-column: 1 / -1;
+  align-content: start;
+}
+
+.studio-search {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.studio-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-head {
+  grid-column: 1 / -1;
+  margin: 10px 0 -2px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--edge, #b45a38) 60%, transparent);
+  font-size: 20px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.affix-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.affix-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 2px solid var(--edge, #b45a38);
+  padding: 6px 8px;
+}
+
+.affix-row input[type="text"] {
+  flex: 1 1 10rem;
+}
+
+.affix-row input[type="number"] {
+  width: 5rem;
+}
+
+.affix-proc {
+  flex: 0 0 auto;
+  opacity: 0.7;
+  font-size: 14px;
 }
 
 @media (max-width: 800px) {

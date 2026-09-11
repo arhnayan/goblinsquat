@@ -1,4 +1,4 @@
-import { makeFood, type Item } from "./catalog";
+import { getBalance, makeFood, type Item } from "./catalog";
 import { rollLootArmor, rollLootWeapon, rollPotion } from "./loot";
 import type { Rng } from "./rng";
 
@@ -21,18 +21,19 @@ export function catalogPrice(item: Item): number {
 }
 
 export function scaledPrice(base: number, depth: number): number {
-  return Math.max(1, Math.round(base * (1 + depth * 0.15)));
+  return Math.max(1, Math.round(base * (1 + depth * getBalance().shopDepthPriceSlope)));
 }
 
 export function sellPrice(item: Item): number {
   const value = catalogPrice(item);
   if (value <= 0) return 0;
-  return Math.max(1, Math.floor(value * 0.4));
+  return Math.max(1, Math.floor(value * getBalance().shopSellMul));
 }
 
 export function generateShopOffers(rng: Rng, depth: number): ShopState {
   const offers: ShopOffer[] = [];
-  const n = rng.range(4, 6);
+  const b = getBalance();
+  const n = rng.range(b.shopOfferMin, b.shopOfferMax);
   const kinds: Array<"potion" | "food" | "weapon" | "armor"> = [
     "potion",
     "food",
@@ -45,7 +46,7 @@ export function generateShopOffers(rng: Rng, depth: number): ShopState {
   }
   if (offers.length) {
     const sale = rng.pick(offers);
-    sale.price = Math.max(1, Math.round(sale.price * 0.7));
+    sale.price = Math.max(1, Math.round(sale.price * b.shopSaleMul));
   }
   return { offers };
 }

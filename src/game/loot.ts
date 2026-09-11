@@ -1,11 +1,13 @@
 import type { Rng } from "./rng";
 import {
+  getBalance,
   makeArmor,
   makePotion,
   makeWeapon,
   pickArmor,
   pickWeapon,
   potionHeal,
+  type AffixDef,
   type Item,
   type ItemRarity,
   type PotionKind,
@@ -13,45 +15,34 @@ import {
 
 export const RARITY_ORDER: ItemRarity[] = ["common", "fine", "mastercraft"];
 
-const RARITY_SLOTS: Record<ItemRarity, number> = {
-  common: 0,
-  fine: 1,
-  mastercraft: 2,
-};
+function rarityMul(rarity: ItemRarity): number {
+  const b = getBalance();
+  if (rarity === "common") return b.rarityCommonPriceMul;
+  return rarity === "fine" ? b.rarityFine.priceMul : b.rarityMastercraft.priceMul;
+}
 
-const RARITY_PRICE_MUL: Record<ItemRarity, number> = {
-  common: 1,
-  fine: 1.5,
-  mastercraft: 2.4,
-};
-
-type Affix = {
-  id: string;
-  label: string;
-  atkBonus?: number;
-  defBonus?: number;
-  proc?: "lifesteal" | "keen" | "thorns" | "wardStatus";
-};
-
-export const WEAPON_AFFIXES: Affix[] = [
-  { id: "heavy", label: "heavy", atkBonus: 1 },
-  { id: "vampiric", label: "vampiric", proc: "lifesteal" },
-  { id: "keen", label: "keen", proc: "keen" },
-];
-
-export const ARMOR_AFFIXES: Affix[] = [
-  { id: "sturdy", label: "sturdy", defBonus: 1 },
-  { id: "thorned", label: "thorned", proc: "thorns" },
-  { id: "warded", label: "warded", proc: "wardStatus" },
-];
+function raritySlots(rarity: ItemRarity): number {
+  const b = getBalance();
+  if (rarity === "common") return b.rarityCommonAffixSlots;
+  return rarity === "fine" ? b.rarityFine.affixSlots : b.rarityMastercraft.affixSlots;
+}
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
 function rarityWeights(depth: number): Record<ItemRarity, number> {
-  const fine = clamp(14 + depth * 3, 14, 46);
-  const mastercraft = clamp(2 + depth * 2, 2, 22);
+  const b = getBalance();
+  const fine = clamp(
+    b.rarityFine.weightBase + depth * b.rarityFine.weightSlope,
+    b.rarityFine.weightMin,
+    b.rarityFine.weightMax,
+  );
+  const mastercraft = clamp(
+    b.rarityMastercraft.weightBase + depth * b.rarityMastercraft.weightSlope,
+    b.rarityMastercraft.weightMin,
+    b.rarityMastercraft.weightMax,
+  );
   const common = Math.max(10, 100 - fine - mastercraft);
   return { common, fine, mastercraft };
 }
@@ -70,7 +61,7 @@ export function rollRarity(depth: number, rng: Rng, minRarity: ItemRarity = "com
   return pool[pool.length - 1]!;
 }
 
-function pickAffixes(pool: Affix[], n: number, rng: Rng): Affix[] {
+function pickAffixes(pool: AffixDef[], n: number, rng: Rng): AffixDef[] {
   if (n <= 0) return [];
   const shuffled = [...pool];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -82,7 +73,7 @@ function pickAffixes(pool: Affix[], n: number, rng: Rng): Affix[] {
   return shuffled.slice(0, Math.min(n, shuffled.length));
 }
 
-export function composeItemName(base: string, rarity: ItemRarity, affixes: Affix[]): string {
+export function composeItemName(base: string, rarity: ItemRarity, affixes: AffixDef[]): string {
   const prefix = rarity === "common" ? "" : `${rarity} `;
   const words = affixes.map((a) => a.label).join(" ");
   return `${prefix}${words ? words + " " : ""}${base}`;
@@ -90,15 +81,16 @@ export function composeItemName(base: string, rarity: ItemRarity, affixes: Affix
 
 function applyRarity(item: Item, depth: number, rng: Rng, minRarity?: ItemRarity): Item {
   const rarity = rollRarity(depth, rng, minRarity ?? "common");
-  const pool = item.kind === "weapon" ? WEAPON_AFFIXES : ARMOR_AFFIXES;
-  const chosen = pickAffixes(pool, RARITY_SLOTS[rarity], rng);
+  const b = getBalance();
+  const pool = item.kind === "weapon" ? b.weaponAffixes : b.armorAffixes;
+  const chosen = pickAffixes(pool, raritySlots(rarity), rng);
   for (const a of chosen) {
     if (item.kind === "weapon") item.weaponAtk = (item.weaponAtk ?? 0) + (a.atkBonus ?? 0);
     else item.armorDef = (item.armorDef ?? 0) + (a.defBonus ?? 0);
   }
   item.rarity = rarity;
   item.affixIds = chosen.map((a) => a.id);
-  item.price = Math.round((item.price ?? 0) * RARITY_PRICE_MUL[rarity]);
+  item.price = Math.round((item.price ?? 0) * rarityMul(rarity));
   item.name = composeItemName(item.name, rarity, chosen);
   return item;
 }
@@ -126,8 +118,17 @@ export function rollLootArmor(
 }
 
 function potionWeights(depth: number): Record<PotionKind, number> {
-  const antidote = clamp(8 + depth * 1.5, 8, 22);
-  const vigor = clamp(2 + depth * 1.5, 2, 18);
+  const b = getBalance();
+  const antidote = clamp(
+    b.potionAntidoteBase + depth * b.potionAntidoteSlope,
+    b.potionAntidoteMin,
+    b.potionAntidoteMax,
+  );
+  const vigor = clamp(
+    b.potionVigorBase + depth * b.potionVigorSlope,
+    b.potionVigorMin,
+    b.potionVigorMax,
+  );
   const heal = Math.max(10, 100 - antidote - vigor);
   return { heal, antidote, vigor };
 }
@@ -157,7 +158,8 @@ export function rollPotion(depth: number, rng: Rng, x: number, z: number): Item 
 }
 
 export function eliteChance(depth: number): number {
-  return Math.min(0.25, Math.max(0, (depth - 2) * 0.035));
+  const b = getBalance();
+  return Math.min(b.eliteChanceCap, Math.max(0, (depth - b.eliteDepthOffset) * b.eliteChanceSlope));
 }
 
 export function hasAffix(affixIds: string[] | undefined, id: string): boolean {

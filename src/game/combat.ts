@@ -1,6 +1,7 @@
 import type { Rng } from "./rng";
 import {
   DEFAULT_LOOT_TABLE,
+  getBalance,
   makeFood,
   makeGold,
   type Item,
@@ -8,10 +9,6 @@ import {
   type MonsterDef,
 } from "./catalog";
 import { rollLootArmor, rollLootWeapon, rollPotion } from "./loot";
-
-export const CRIT_CHANCE = 0.18;
-
-const ELITE_DROP_BOOST = 1.6;
 
 export type Strike = {
   dmg: number;
@@ -24,14 +21,14 @@ export function rollDamage(rng: Rng, atk: number, def: number): number {
 
 export function rollStrike(rng: Rng, atk: number, def: number, critBonus = 0): Strike {
   const base = rollDamage(rng, atk, def);
-  const crit = rng.chance(CRIT_CHANCE + critBonus);
+  const crit = rng.chance(getBalance().critChance + critBonus);
   return { dmg: crit ? base * 2 : base, crit };
 }
 
 export function killDrop(rng: Rng, monster: Monster, depth: number, def: MonsterDef): Item | null {
   if (monster.hp > 0) return null;
   const t = def.loot ?? DEFAULT_LOOT_TABLE;
-  const boost = monster.elite ? ELITE_DROP_BOOST : 1;
+  const boost = monster.elite ? getBalance().eliteDropBoost : 1;
   const minRarity = monster.elite ? "fine" : undefined;
   if (rng.chance(Math.min(1, t.potionChance * boost))) return rollPotion(depth, rng, monster.x, monster.z);
   if (rng.chance(Math.min(1, t.foodChance * boost))) return makeFood(monster.x, monster.z);

@@ -1,4 +1,5 @@
 import {
+  blankAffix,
   blankArmor,
   blankMonster,
   blankWeapon,
@@ -10,6 +11,7 @@ import {
   persistCatalog,
   resetCatalog,
   slugId,
+  type AffixDef,
   type ArmorDef,
   type MonsterDef,
   type WeaponDef,
@@ -23,13 +25,15 @@ import {
   type ThemeColorKey,
 } from "./theme";
 
-type Tab = "beasts" | "steel" | "hide" | "vitals";
+type Tab = "beasts" | "steel" | "hide" | "vitals" | "loot" | "rules";
+type AffixKind = "weaponAffixes" | "armorAffixes";
 
 export function mountStudio(root: HTMLElement): void {
   let draft = cloneCatalog(getCatalog());
   let tab: Tab = "beasts";
   let selected = draft.monsters[0]?.id ?? "";
   let note = "edits apply to new floors after save";
+  let filter = "";
 
   const render = () => {
     root.replaceChildren(build());
@@ -50,6 +54,18 @@ export function mountStudio(root: HTMLElement): void {
   const currentMonster = () => draft.monsters.find((m) => m.id === selected);
   const currentWeapon = () => draft.weapons.find((w) => w.id === selected);
   const currentArmor = () => draft.armors.find((a) => a.id === selected);
+
+  const matchesFilter = (name: string) => {
+    const q = filter.trim().toLowerCase();
+    return !q || name.toLowerCase().includes(q);
+  };
+
+  const visibleRows = (): { id: string; name: string }[] => {
+    if (tab === "beasts") return draft.monsters.filter((m) => matchesFilter(m.name));
+    if (tab === "steel") return draft.weapons.filter((w) => matchesFilter(w.name));
+    if (tab === "hide") return draft.armors.filter((a) => matchesFilter(a.name));
+    return [];
+  };
 
   const save = () => {
     persistCatalog(draft);
@@ -151,6 +167,11 @@ export function mountStudio(root: HTMLElement): void {
   };
 
   const remove = () => {
+    if (tab !== "beasts" && tab !== "steel" && tab !== "hide") return;
+    const row =
+      tab === "beasts" ? currentMonster() : tab === "steel" ? currentWeapon() : currentArmor();
+    if (!row) return;
+    if (!confirm(`delete "${row.name}" from the draft?`)) return;
     if (tab === "beasts") {
       if (draft.monsters.length <= 1) {
         note = "keep at least one beast";
@@ -165,14 +186,14 @@ export function mountStudio(root: HTMLElement): void {
         return;
       }
       draft.weapons = draft.weapons.filter((w) => w.id !== selected);
-    } else if (tab === "hide") {
+    } else {
       if (draft.armors.length <= 1) {
         note = "keep at least one armor";
         render();
         return;
       }
       draft.armors = draft.armors.filter((a) => a.id !== selected);
-    } else return;
+    }
     selectFirst(tab);
     note = "removed from draft. save to commit";
     render();
@@ -199,10 +220,13 @@ export function mountStudio(root: HTMLElement): void {
       ["steel", "steel"],
       ["hide", "hide"],
       ["vitals", "vitals"],
+      ["loot", "loot"],
+      ["rules", "rules"],
     ] as const) {
       const b = btn(label, tab === id ? "btn tab is-on" : "btn tab");
       b.addEventListener("click", () => {
         tab = id;
+        filter = "";
         selectFirst(tab);
         render();
       });
@@ -242,20 +266,42 @@ export function mountStudio(root: HTMLElement): void {
       body.append(vitalsForm());
       return body;
     }
-    const list = el("aside", "studio-list");
-    if (tab === "beasts") {
-      for (const row of draft.monsters) {
-        list.append(listItem(row.id, row.name, row.glyph, row.palette));
-      }
-    } else if (tab === "steel") {
-      for (const row of draft.weapons) {
-        list.append(listItem(row.id, row.name, ")", null));
-      }
-    } else {
-      for (const row of draft.armors) {
-        list.append(listItem(row.id, row.name, "]", null));
-      }
+    if (tab === "loot") {
+      body.append(lootForm());
+      return body;
     }
+    if (tab === "rules") {
+      body.append(rulesForm());
+      return body;
+    }
+    const list = el("aside", "studio-list");
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "studio-search";
+    search.placeholder = "filter by name";
+    search.value = filter;
+    search.autocomplete = "off";
+    search.spellcheck = false;
+    const items = el("div", "studio-items");
+    const renderItems = () => {
+      items.replaceChildren();
+      for (const row of visibleRows()) {
+        if (tab === "beasts") {
+          const m = row as MonsterDef;
+          items.append(listItem(m.id, m.name, m.glyph, m.palette));
+        } else if (tab === "steel") {
+          items.append(listItem(row.id, row.name, ")", null));
+        } else {
+          items.append(listItem(row.id, row.name, "]", null));
+        }
+      }
+    };
+    search.addEventListener("input", () => {
+      filter = search.value;
+      renderItems();
+    });
+    renderItems();
+    list.append(search, items);
     const tools = el("div", "studio-list-tools");
     const n = btn("new", "btn");
     n.addEventListener("click", addNew);
@@ -409,8 +455,18 @@ export function mountStudio(root: HTMLElement): void {
   const weaponForm = (w: WeaponDef): HTMLElement => {
     const wrap = el("form", "form-grid");
     wrap.addEventListener("submit", (e) => e.preventDefault());
+    const preview = el("div", "glyph-preview");
+    const glyphFace = el("span", "glyph-face");
+    glyphFace.textContent = ")";
+    const glyphCap = el("span", "glyph-cap");
+    glyphCap.textContent = w.name;
+    preview.append(glyphFace, glyphCap);
+    wrap.append(preview);
     wrap.append(
-      field("name", textInput(w.name, (v) => (w.name = v))),
+      field("name", textInput(w.name, (v) => {
+        w.name = v;
+        glyphCap.textContent = v;
+      })),
       field("id", textInput(w.id, (v) => {
         const next = slugId(v || w.name, new Set([...taken("weapons")].filter((id) => id !== w.id)));
         w.id = next;
@@ -426,8 +482,18 @@ export function mountStudio(root: HTMLElement): void {
   const armorForm = (a: ArmorDef): HTMLElement => {
     const wrap = el("form", "form-grid");
     wrap.addEventListener("submit", (e) => e.preventDefault());
+    const preview = el("div", "glyph-preview");
+    const glyphFace = el("span", "glyph-face");
+    glyphFace.textContent = "]";
+    const glyphCap = el("span", "glyph-cap");
+    glyphCap.textContent = a.name;
+    preview.append(glyphFace, glyphCap);
+    wrap.append(preview);
     wrap.append(
-      field("name", textInput(a.name, (v) => (a.name = v))),
+      field("name", textInput(a.name, (v) => {
+        a.name = v;
+        glyphCap.textContent = v;
+      })),
       field("id", textInput(a.id, (v) => {
         const next = slugId(v || a.name, new Set([...taken("armors")].filter((id) => id !== a.id)));
         a.id = next;
@@ -458,13 +524,149 @@ export function mountStudio(root: HTMLElement): void {
     return wrap;
   };
 
+  const sectionHead = (label: string): HTMLElement => {
+    const h = el("h2", "section-head");
+    h.textContent = label;
+    return h;
+  };
+
+  const affixRow = (kind: AffixKind, a: AffixDef): HTMLElement => {
+    const row = el("div", "affix-row");
+    const label = textInput(a.label, (v) => (a.label = v));
+    const bonus =
+      kind === "weaponAffixes"
+        ? numInput(a.atkBonus ?? 0, -9, 9, (v) => (a.atkBonus = v))
+        : numInput(a.defBonus ?? 0, -9, 9, (v) => (a.defBonus = v));
+    const badge = el("span", "affix-proc");
+    badge.textContent = a.proc ? a.proc : "no proc";
+    const del = btn("del", "btn");
+    del.addEventListener("click", () => {
+      if (!confirm(`delete affix "${a.label}"?`)) return;
+      draft.balance[kind] = draft.balance[kind].filter((row2) => row2.id !== a.id);
+      note = "affix removed. save when ready";
+      render();
+    });
+    row.append(label, bonus, badge, del);
+    return row;
+  };
+
+  const affixList = (kind: AffixKind, label: string): HTMLElement => {
+    const wrap = el("div", "affix-list");
+    wrap.append(sectionHead(label));
+    for (const a of draft.balance[kind]) {
+      wrap.append(affixRow(kind, a));
+    }
+    const addBtn = btn(`add ${kind === "weaponAffixes" ? "weapon" : "armor"} affix`, "btn");
+    addBtn.addEventListener("click", () => {
+      const ids = new Set(draft.balance[kind].map((row) => row.id));
+      draft.balance[kind].push(blankAffix(kind === "weaponAffixes" ? "weapon" : "armor", ids));
+      note = "affix added. save when ready";
+      render();
+    });
+    wrap.append(addBtn);
+    return wrap;
+  };
+
+  const lootForm = (): HTMLElement => {
+    const wrap = el("div", "form-grid wide-form");
+    const b = draft.balance;
+    const intro = el("p", "studio-sub");
+    intro.textContent =
+      "rarity, potion kind, and elite curves are base + (depth x slope), clamped to min/max. " +
+      "the vampiric/keen/thorned/warded affixes carry hardcoded effects tied to their id — " +
+      "renaming their label is safe, but deleting them removes the effect.";
+    wrap.append(intro);
+
+    wrap.append(sectionHead("rarity curve"));
+    wrap.append(
+      field("common price x", numInput(b.rarityCommonPriceMul, 0.1, 10, (v) => (b.rarityCommonPriceMul = v), 0.1)),
+      field("common affix slots", numInput(b.rarityCommonAffixSlots, 0, 6, (v) => (b.rarityCommonAffixSlots = v))),
+      field("fine weight base", numInput(b.rarityFine.weightBase, 0, 100, (v) => (b.rarityFine.weightBase = v))),
+      field("fine weight / depth", numInput(b.rarityFine.weightSlope, 0, 20, (v) => (b.rarityFine.weightSlope = v), 0.5)),
+      field("fine weight min", numInput(b.rarityFine.weightMin, 0, 100, (v) => (b.rarityFine.weightMin = v))),
+      field("fine weight max", numInput(b.rarityFine.weightMax, 0, 100, (v) => (b.rarityFine.weightMax = v))),
+      field("fine affix slots", numInput(b.rarityFine.affixSlots, 0, 6, (v) => (b.rarityFine.affixSlots = v))),
+      field("fine price x", numInput(b.rarityFine.priceMul, 0.1, 10, (v) => (b.rarityFine.priceMul = v), 0.1)),
+      field("mastercraft weight base", numInput(b.rarityMastercraft.weightBase, 0, 100, (v) => (b.rarityMastercraft.weightBase = v))),
+      field("mastercraft weight / depth", numInput(b.rarityMastercraft.weightSlope, 0, 20, (v) => (b.rarityMastercraft.weightSlope = v), 0.5)),
+      field("mastercraft weight min", numInput(b.rarityMastercraft.weightMin, 0, 100, (v) => (b.rarityMastercraft.weightMin = v))),
+      field("mastercraft weight max", numInput(b.rarityMastercraft.weightMax, 0, 100, (v) => (b.rarityMastercraft.weightMax = v))),
+      field("mastercraft affix slots", numInput(b.rarityMastercraft.affixSlots, 0, 6, (v) => (b.rarityMastercraft.affixSlots = v))),
+      field("mastercraft price x", numInput(b.rarityMastercraft.priceMul, 0.1, 10, (v) => (b.rarityMastercraft.priceMul = v), 0.1)),
+    );
+
+    wrap.append(sectionHead("potion kind weights"));
+    wrap.append(
+      field("antidote base", numInput(b.potionAntidoteBase, 0, 100, (v) => (b.potionAntidoteBase = v))),
+      field("antidote / depth", numInput(b.potionAntidoteSlope, 0, 20, (v) => (b.potionAntidoteSlope = v), 0.1)),
+      field("antidote min", numInput(b.potionAntidoteMin, 0, 100, (v) => (b.potionAntidoteMin = v))),
+      field("antidote max", numInput(b.potionAntidoteMax, 0, 100, (v) => (b.potionAntidoteMax = v))),
+      field("vigor base", numInput(b.potionVigorBase, 0, 100, (v) => (b.potionVigorBase = v))),
+      field("vigor / depth", numInput(b.potionVigorSlope, 0, 20, (v) => (b.potionVigorSlope = v), 0.1)),
+      field("vigor min", numInput(b.potionVigorMin, 0, 100, (v) => (b.potionVigorMin = v))),
+      field("vigor max", numInput(b.potionVigorMax, 0, 100, (v) => (b.potionVigorMax = v))),
+    );
+
+    wrap.append(sectionHead("elites"));
+    wrap.append(
+      field("depth offset", numInput(b.eliteDepthOffset, 0, 20, (v) => (b.eliteDepthOffset = v))),
+      field("chance / depth", numInput(b.eliteChanceSlope, 0, 1, (v) => (b.eliteChanceSlope = v), 0.005)),
+      field("chance cap", numInput(b.eliteChanceCap, 0, 1, (v) => (b.eliteChanceCap = v), 0.01)),
+      field("drop boost x", numInput(b.eliteDropBoost, 0.1, 10, (v) => (b.eliteDropBoost = v), 0.1)),
+      field("hp x", numInput(b.eliteHpMul, 0.1, 10, (v) => (b.eliteHpMul = v), 0.1)),
+      field("atk x", numInput(b.eliteAtkMul, 0.1, 10, (v) => (b.eliteAtkMul = v), 0.1)),
+      field("def bonus", numInput(b.eliteDefBonus, 0, 20, (v) => (b.eliteDefBonus = v))),
+    );
+
+    wrap.append(affixList("weaponAffixes", "weapon affixes"));
+    wrap.append(affixList("armorAffixes", "armor affixes"));
+    return wrap;
+  };
+
+  const rulesForm = (): HTMLElement => {
+    const wrap = el("div", "form-grid wide-form");
+    const b = draft.balance;
+    const intro = el("p", "studio-sub");
+    intro.textContent = "shop and combat tuning.";
+    wrap.append(intro);
+    wrap.append(
+      field("crit chance %", numInput(Math.round(b.critChance * 100), 0, 100, (v) => (b.critChance = v / 100))),
+      field("shop offers min", numInput(b.shopOfferMin, 1, 20, (v) => (b.shopOfferMin = v))),
+      field("shop offers max", numInput(b.shopOfferMax, 1, 20, (v) => (b.shopOfferMax = v))),
+      field("sell price x", numInput(b.shopSellMul, 0, 2, (v) => (b.shopSellMul = v), 0.05)),
+      field("sale discount x", numInput(b.shopSaleMul, 0, 1, (v) => (b.shopSaleMul = v), 0.05)),
+      field("price / depth", numInput(b.shopDepthPriceSlope, 0, 2, (v) => (b.shopDepthPriceSlope = v), 0.01)),
+    );
+    return wrap;
+  };
+
   window.addEventListener("keydown", (e) => {
     if (e.repeat) return;
+    if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
+      e.preventDefault();
+      save();
+      return;
+    }
     if (isFormTarget(e.target)) return;
     if (e.code === "KeyC") {
       e.preventDefault();
       cycleTheme();
       render();
+      return;
+    }
+    if (e.code === "ArrowDown" || e.code === "ArrowUp") {
+      const rows = visibleRows();
+      if (!rows.length) return;
+      e.preventDefault();
+      const idx = rows.findIndex((r) => r.id === selected);
+      const next =
+        e.code === "ArrowDown"
+          ? rows[Math.min(rows.length - 1, idx + 1)]
+          : rows[Math.max(0, idx - 1)];
+      if (next) {
+        selected = next.id;
+        render();
+      }
     }
   });
 

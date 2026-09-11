@@ -451,7 +451,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       hud.log("your armor bites back");
       if (m.hp <= 0) killMonster(m, false);
     }
-    const warded = armorAffixes.includes("wardStatus");
+    const warded = armorAffixes.includes("warded");
     if (def.poison && !(warded && run.rng.chance(0.25))) {
       const msg = applyStatus(run, "poison");
       if (msg) hud.log(msg);
