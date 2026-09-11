@@ -2,7 +2,7 @@ import { charAt, setTile, type Dungeon } from "./dungeon";
 import type { Rng } from "./rng";
 import type { StatusKind } from "./status";
 
-export type TrapKind = "spike" | "gas";
+export type TrapKind = "spike" | "gas" | "alarm";
 
 export type TrapHit = {
   kind: TrapKind;
@@ -14,7 +14,7 @@ export type TrapHit = {
 };
 
 export function isTrapTile(ch: string): boolean {
-  return ch === "^" || ch === "'";
+  return ch === "^" || ch === "'" || ch === ":";
 }
 
 export function triggerTrap(
@@ -33,6 +33,14 @@ export function triggerTrap(
       dmg,
       log: "spikes lance you",
       monsterLog: "stumbles into spikes",
+    };
+  }
+  if (ch === ":") {
+    return {
+      kind: "alarm",
+      dmg: 0,
+      log: "a ward shrieks",
+      monsterLog: "sets off a ward",
     };
   }
   return {

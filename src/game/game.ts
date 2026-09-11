@@ -19,6 +19,7 @@ import {
   disposeActorView,
   retintActor,
   setActorVisible,
+  setActorWeapon,
   startActorDeath,
   startActorHop,
   startActorLunge,
@@ -39,9 +40,11 @@ import {
   countKind,
   equippedAffixes,
   firstOfKind,
+  hasTrinketEffect,
   packFull,
   pickupMessage,
   takeFromPack,
+  trinketMagnitude,
   usePackItem,
 } from "./inventory";
 import { isFormTarget } from "./dom";
@@ -151,6 +154,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       if (m.hp <= 0) continue;
       const v = createActorView(font, m.glyph, m.id, m.x, m.z, scene);
       retintActor(v, m.elite);
+      setActorWeapon(v, monsterDef(m.kind).wieldsVisualType, m.elite ? "fine" : undefined);
       monsterViews.set(m.id, v);
     }
     for (const it of floor.items) {
@@ -225,6 +229,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     setFloorTheme(floor.themeId);
     world = buildGlyphWorld(font, floor.dungeon, scene);
     player = createPlayer(font, floor.dungeon.spawn.x, floor.dungeon.spawn.z, scene);
+    syncPlayerGear();
     spawnViews();
     rebuildOcc();
     refreshFov();
@@ -269,16 +274,45 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     player.setEnabled(false);
   }
 
+  function handleLethalCheck(): boolean {
+    if (run.hp > 0) return false;
+    if (hasTrinketEffect(run, "undying") && !run.usedRevive) {
+      run.usedRevive = true;
+      run.hp = 1;
+      hud.log("the charm shatters, sparing you");
+      hud.refresh(run);
+      return false;
+    }
+    die();
+    return true;
+  }
+
+  function gainGold(amount: number): void {
+    run.gold += Math.round(amount * (1 + trinketMagnitude(run, "hoarder")));
+  }
+
+  function syncPlayerGear(): void {
+    const weapon = run.pack.find((i) => i.id === run.weaponId) ?? null;
+    player.setWeapon(weapon);
+    player.setNightlight(hasTrinketEffect(run, "nightlight"));
+  }
+
   function spendTurn(): boolean {
     if (run.status !== "play") return false;
     run.turns += 1;
     const logs = tickStatuses(run);
     for (const msg of logs) hud.log(msg);
-    if (logs.length) hud.refresh(run);
-    if (run.hp <= 0) {
-      die();
-      return false;
+    let changed = logs.length > 0;
+    if (hasTrinketEffect(run, "mend") && run.hp < run.maxHp) {
+      const interval = Math.max(1, Math.round(trinketMagnitude(run, "mend")));
+      if (run.turns % interval === 0) {
+        run.hp = Math.min(run.maxHp, run.hp + 1);
+        hud.log("the charm knits your wounds");
+        changed = true;
+      }
     }
+    if (changed) hud.refresh(run);
+    if (handleLethalCheck()) return false;
     return true;
   }
 
@@ -295,7 +329,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     if (it.kind === "gold") {
       floor.items.splice(idx, 1);
       detachItem(it);
-      run.gold += it.gold ?? 5;
+      gainGold(it.gold ?? 5);
       hud.log(pickupMessage(it));
       hud.refresh(run);
       return;
@@ -415,7 +449,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   function hitMonster(m: Monster): void {
     const full = m.hp >= m.maxHp;
     const affixes = equippedAffixes(run, "weapon");
-    const critBonus = affixes.includes("keen") ? 0.08 : 0;
+    const critBonus = (affixes.includes("keen") ? 0.08 : 0) + trinketMagnitude(run, "keeneye");
     const strike = rollStrike(run.rng, run.atk, m.def, critBonus);
     m.hp -= strike.dmg;
     m.awake = true;
@@ -471,7 +505,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       hud.log("your ward resists it");
     }
     hud.refresh(run);
-    if (run.hp <= 0) die();
+    handleLethalCheck();
   }
 
   function useStairs(dir: "up" | "down"): void {
@@ -527,6 +561,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       return;
     }
     const msg = usePackItem(run, index);
+    syncPlayerGear();
     hud.log(msg);
     hud.refresh(run);
     closeInventory();
@@ -547,6 +582,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       return;
     }
     takeFromPack(run, index);
+    syncPlayerGear();
     placeItem(it, spot.x, spot.z);
     hud.log(`you drop ${aAn(it.name)}`);
     hud.refresh(run);
@@ -638,7 +674,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     }
     const price = sellPrice(it);
     takeFromPack(run, index);
-    run.gold += price;
+    syncPlayerGear();
+    gainGold(price);
     hud.log(`you sell ${aAn(it.name)} for $${price}`);
     hud.showShop(run, shop);
     hud.refresh(run);
@@ -811,6 +848,18 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   }
 
   const PACK_ALERT_RADIUS = 6;
+  const ALARM_RADIUS = 9;
+
+  function alertAll(x: number, z: number, radius: number): void {
+    let alerted = 0;
+    for (const m of floor.monsters) {
+      if (m.hp <= 0 || m.awake) continue;
+      if (chebyshev(m.x, m.z, x, z) > radius) continue;
+      m.awake = true;
+      alerted += 1;
+    }
+    if (alerted > 0) hud.log("nearby monsters stir");
+  }
 
   function alertPack(source: Monster): void {
     let alerted = 0;
@@ -996,12 +1045,13 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     const trap = triggerTrap(floor.dungeon, x, z, run.rng);
     if (trap) {
       world.punchFloor(x, z);
-      run.hp -= trap.dmg;
+      run.hp -= hasTrinketEffect(run, "stalwart") ? 0 : trap.dmg;
       hud.log(trap.log);
       if (trap.status) {
         const msg = applyStatus(run, trap.status, trap.turns);
         if (msg) hud.log(msg);
       }
+      if (trap.kind === "alarm") alertAll(x, z, ALARM_RADIUS);
     } else if (ch === "=") {
       run.hp -= 1;
       hud.log("embers sear you");
@@ -1014,7 +1064,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       hud.log("you scramble over rubble");
     }
     hud.refresh(run);
-    if (run.hp <= 0) die();
+    handleLethalCheck();
   }
 
   function hurtMonsterOnTile(m: Monster): void {

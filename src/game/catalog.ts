@@ -28,13 +28,67 @@ export const RESERVED_GLYPHS = new Set([
   '"',
   "=",
   "M",
+  "0",
+  ":",
 ]);
 
-export type ItemKind = "potion" | "weapon" | "gold" | "amulet" | "armor" | "food";
+export type ItemKind = "potion" | "weapon" | "gold" | "amulet" | "armor" | "food" | "trinket";
 
 export type ItemRarity = "common" | "fine" | "mastercraft";
 
 export type PotionKind = "heal" | "antidote" | "vigor";
+
+export type WeaponVisualType = "sword" | "axe" | "mace" | "dagger" | "spear" | "bow";
+
+export const WEAPON_VISUAL_TYPES: readonly WeaponVisualType[] = [
+  "sword",
+  "axe",
+  "mace",
+  "dagger",
+  "spear",
+  "bow",
+] as const;
+
+const WEAPON_VISUAL_SET = new Set<string>(WEAPON_VISUAL_TYPES);
+
+export function isWeaponVisualType(v: string): v is WeaponVisualType {
+  return WEAPON_VISUAL_SET.has(v);
+}
+
+export type TrinketEffectKind =
+  | "mend"
+  | "undying"
+  | "hoarder"
+  | "gourmand"
+  | "nightlight"
+  | "stalwart"
+  | "keeneye";
+
+export const TRINKET_EFFECT_KINDS: readonly TrinketEffectKind[] = [
+  "mend",
+  "undying",
+  "hoarder",
+  "gourmand",
+  "nightlight",
+  "stalwart",
+  "keeneye",
+] as const;
+
+const TRINKET_EFFECT_SET = new Set<string>(TRINKET_EFFECT_KINDS);
+
+export function isTrinketEffectKind(v: string): v is TrinketEffectKind {
+  return TRINKET_EFFECT_SET.has(v);
+}
+
+export const TRINKET_EFFECT_DEFAULTS: Record<TrinketEffectKind, number> = {
+  mend: 5,
+  undying: 1,
+  hoarder: 0.5,
+  gourmand: 0.5,
+  nightlight: 1.4,
+  stalwart: 1,
+  keeneye: 0.06,
+};
 
 export type Item = {
   id: number;
@@ -50,6 +104,9 @@ export type Item = {
   rarity?: ItemRarity;
   affixIds?: string[];
   potionKind?: PotionKind;
+  weaponVisualType?: WeaponVisualType;
+  trinketEffect?: TrinketEffectKind;
+  trinketMagnitude?: number;
 };
 
 export type MonsterKind = string;
@@ -114,6 +171,7 @@ export type MonsterDef = {
   range: number;
   packAlert: boolean;
   loot?: LootTable;
+  wieldsVisualType?: WeaponVisualType;
 };
 
 export type WeaponDef = {
@@ -122,12 +180,22 @@ export type WeaponDef = {
   atk: number;
   minDepth: number;
   price?: number;
+  visualType: WeaponVisualType;
 };
 
 export type ArmorDef = {
   id: string;
   name: string;
   def: number;
+  minDepth: number;
+  price?: number;
+};
+
+export type TrinketDef = {
+  id: string;
+  name: string;
+  effect: TrinketEffectKind;
+  magnitude?: number;
   minDepth: number;
   price?: number;
 };
@@ -141,6 +209,7 @@ export type CatalogData = {
   vitals: VitalsDef;
   weapons: WeaponDef[];
   armors: ArmorDef[];
+  trinkets: TrinketDef[];
   monsters: MonsterDef[];
 };
 
@@ -173,6 +242,7 @@ export function cloneCatalog(data: CatalogData): CatalogData {
     vitals: { ...data.vitals },
     weapons: data.weapons.map((w) => ({ ...w })),
     armors: data.armors.map((a) => ({ ...a })),
+    trinkets: data.trinkets.map((t) => ({ ...t })),
     monsters: data.monsters.map((m) => ({ ...m })),
   };
 }
@@ -212,6 +282,10 @@ export function listArmors(): ArmorDef[] {
   return current.armors;
 }
 
+export function listTrinkets(): TrinketDef[] {
+  return current.trinkets;
+}
+
 export function potionHeal(): number {
   return current.vitals.potionHeal;
 }
@@ -242,6 +316,14 @@ export function parseCatalog(raw: unknown): CatalogData | null {
   const armors = Array.isArray(o.armors)
     ? o.armors.map(parseArmor).filter((x): x is ArmorDef => !!x)
     : [];
+  const trinketsRaw = Array.isArray(o.trinkets)
+    ? o.trinkets.map(parseTrinket).filter((x): x is TrinketDef => !!x)
+    : [];
+  // Older saved catalogs predate the trinket slot; fall back to the builtin set
+  // rather than treating the whole save as invalid. Safe from the TDZ hazard of
+  // referencing builtinCatalog here because builtinJson always carries trinkets,
+  // so this branch never evaluates during that first bootstrapping call.
+  const trinkets = trinketsRaw.length ? trinketsRaw : builtinCatalog.trinkets;
   const monsters = Array.isArray(o.monsters)
     ? o.monsters.map(parseMonster).filter((x): x is MonsterDef => !!x)
     : [];
@@ -250,6 +332,7 @@ export function parseCatalog(raw: unknown): CatalogData | null {
     vitals,
     weapons: uniqueById(weapons),
     armors: uniqueById(armors),
+    trinkets: uniqueById(trinkets),
     monsters: uniqueById(monsters),
   };
 }
@@ -322,6 +405,7 @@ export function blankWeapon(taken: Set<string>): WeaponDef {
     atk: 4,
     minDepth: 1,
     price: 20,
+    visualType: "sword",
   };
 }
 
@@ -335,11 +419,22 @@ export function blankArmor(taken: Set<string>): ArmorDef {
   };
 }
 
+export function blankTrinket(taken: Set<string>): TrinketDef {
+  return {
+    id: slugId("charm", taken),
+    name: "charm",
+    effect: "mend",
+    minDepth: 1,
+    price: 24,
+  };
+}
+
 function emptyCatalog(): CatalogData {
   return {
     vitals: { potionHeal: 8, foodHeal: 4 },
-    weapons: [{ id: "stick", name: "stick", atk: 3, minDepth: 1 }],
+    weapons: [{ id: "stick", name: "stick", atk: 3, minDepth: 1, visualType: "sword" }],
     armors: [{ id: "rags", name: "rags", def: 1, minDepth: 1 }],
+    trinkets: [{ id: "twine", name: "twine charm", effect: "mend", minDepth: 1, price: 20 }],
     monsters: [
       {
         id: "rat",
@@ -383,12 +478,14 @@ function parseWeapon(raw: unknown): WeaponDef | null {
   const o = raw as Record<string, unknown>;
   const name = str(o.name, "");
   if (!name) return null;
+  const visualRaw = str(o.visualType, "sword");
   return {
     id: str(o.id, slugId(name, new Set())),
     name,
     atk: clampInt(o.atk, 0, 99, 3),
     minDepth: clampInt(o.minDepth, 1, 99, 1),
     price: clampInt(o.price, 0, 999, (typeof o.atk === "number" ? o.atk : 3) * 8),
+    visualType: isWeaponVisualType(visualRaw) ? visualRaw : "sword",
   };
 }
 
@@ -406,6 +503,24 @@ function parseArmor(raw: unknown): ArmorDef | null {
   };
 }
 
+function parseTrinket(raw: unknown): TrinketDef | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const name = str(o.name, "");
+  if (!name) return null;
+  const effectRaw = str(o.effect, "mend");
+  const effect: TrinketEffectKind = isTrinketEffectKind(effectRaw) ? effectRaw : "mend";
+  return {
+    id: str(o.id, slugId(name, new Set())),
+    name,
+    effect,
+    magnitude:
+      o.magnitude == null ? undefined : clampNum(o.magnitude, 0, 99, TRINKET_EFFECT_DEFAULTS[effect]),
+    minDepth: clampInt(o.minDepth, 1, 99, 1),
+    price: clampInt(o.price, 0, 999, 24),
+  };
+}
+
 function parseMonster(raw: unknown): MonsterDef | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -413,6 +528,9 @@ function parseMonster(raw: unknown): MonsterDef | null {
   if (!name) return null;
   const paletteRaw = str(o.palette, "goblin");
   const palette: ThemeColorKey = isThemeColorKey(paletteRaw) ? paletteRaw : "goblin";
+  const wieldsRaw = o.wieldsVisualType;
+  const wieldsVisualType =
+    typeof wieldsRaw === "string" && isWeaponVisualType(wieldsRaw) ? wieldsRaw : undefined;
   const maxRaw = o.maxDepth;
   const maxDepth =
     maxRaw === null || maxRaw === undefined || maxRaw === ""
@@ -444,6 +562,7 @@ function parseMonster(raw: unknown): MonsterDef | null {
     range: clampInt(o.range, 1, 8, 3),
     packAlert: bool(o.packAlert),
     loot: parseLoot(o.loot),
+    wieldsVisualType,
   };
 }
 
@@ -532,6 +651,7 @@ export function makeWeapon(x: number, z: number, w: WeaponDef): Item {
     z,
     weaponAtk: w.atk,
     price: w.price ?? w.atk * 8,
+    weaponVisualType: w.visualType,
   };
 }
 
@@ -545,6 +665,20 @@ export function makeArmor(x: number, z: number, a: ArmorDef): Item {
     z,
     armorDef: a.def,
     price: a.price ?? a.def * 14,
+  };
+}
+
+export function makeTrinket(x: number, z: number, t: TrinketDef): Item {
+  return {
+    id: allocId(),
+    kind: "trinket",
+    name: t.name,
+    glyph: "0",
+    x,
+    z,
+    price: t.price ?? 24,
+    trinketEffect: t.effect,
+    trinketMagnitude: t.magnitude ?? TRINKET_EFFECT_DEFAULTS[t.effect],
   };
 }
 
@@ -563,6 +697,15 @@ export function pickArmor(
 ): ArmorDef {
   const all = current.armors;
   const pool = all.filter((a) => a.minDepth <= depth);
+  return rng.pick(pool.length ? pool : all);
+}
+
+export function pickTrinket(
+  depth: number,
+  rng: { pick: <T>(arr: readonly T[]) => T },
+): TrinketDef {
+  const all = current.trinkets;
+  const pool = all.filter((t) => t.minDepth <= depth);
   return rng.pick(pool.length ? pool : all);
 }
 

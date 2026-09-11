@@ -16,6 +16,7 @@ export type ThemeColors = {
   potion: number;
   weapon: number;
   armor: number;
+  trinket: number;
   food: number;
   gold: number;
   amulet: number;
@@ -46,6 +47,7 @@ export const THEME_COLOR_KEYS: readonly ThemeColorKey[] = [
   "potion",
   "weapon",
   "armor",
+  "trinket",
   "food",
   "gold",
   "amulet",
@@ -90,6 +92,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     potion: 0x8aaa70,
     weapon: 0xd0b8a8,
     armor: 0xa09080,
+    trinket: 0xc8a0e8,
     food: 0xc8a060,
     gold: 0xf0c878,
     amulet: 0xffcc55,
@@ -119,6 +122,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     potion: 0x7ad070,
     weapon: 0xa8c8a0,
     armor: 0x6a8a68,
+    trinket: 0xb8a0e8,
     food: 0xa8c070,
     gold: 0xc8e878,
     amulet: 0xa8ff70,
@@ -148,6 +152,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     potion: 0x6aa8c0,
     weapon: 0xc8d0d8,
     armor: 0x8898a8,
+    trinket: 0xc8b8f8,
     food: 0xb8c8d0,
     gold: 0xe8f0f8,
     amulet: 0x9ee8ff,
@@ -177,6 +182,7 @@ const THEMES: Record<ThemeName, ThemeColors> = {
     potion: 0xc07058,
     weapon: 0xd8a898,
     armor: 0x986050,
+    trinket: 0xe8a8d0,
     food: 0xc89050,
     gold: 0xf0b060,
     amulet: 0xff7030,
@@ -220,6 +226,7 @@ export function applyCssVars(): void {
   root.style.setProperty("--c-potion", hexCss(c.potion));
   root.style.setProperty("--c-weapon", hexCss(c.weapon));
   root.style.setProperty("--c-armor", hexCss(c.armor));
+  root.style.setProperty("--c-trinket", hexCss(c.trinket));
   root.style.setProperty("--c-food", hexCss(c.food));
   root.style.setProperty("--c-amulet", hexCss(c.amulet));
 }

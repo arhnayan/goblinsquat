@@ -28,11 +28,15 @@ import {
   updateDustBurst,
   type DustBurst,
 } from "./dust";
+import type { ItemRarity, WeaponVisualType } from "./catalog";
+import { buildWeaponVisual, retintWeaponVisual, type WeaponVisual } from "./weapons";
 
 export type ActorView = HopRig & {
   id: number;
   glyph: string;
   mesh: Mesh;
+  weaponAnchor: Object3D;
+  weaponVisual: WeaponVisual | null;
   hop: Hop | null;
   lunge: { dx: number; dz: number; t: number; struck: boolean } | null;
   settleT: number;
@@ -68,7 +72,11 @@ export function createActorView(
   const hopGroup = new Object3D();
   const squash = new Object3D();
   const lean = new Object3D();
+  const weaponAnchor = new Object3D();
+  weaponAnchor.position.set(0.3, 0.5, 0.1);
+  weaponAnchor.rotation.set(0, FACE_YAW, -0.15);
   lean.add(mesh);
+  lean.add(weaponAnchor);
   squash.add(lean);
   hopGroup.add(squash);
   root.add(hopGroup);
@@ -84,6 +92,8 @@ export function createActorView(
     squash,
     lean,
     mesh,
+    weaponAnchor,
+    weaponVisual: null,
     hop: null,
     lunge: null,
     settleT: 1,
@@ -93,6 +103,21 @@ export function createActorView(
     gridZ: z,
     visible: true,
   };
+}
+
+export function setActorWeapon(
+  view: ActorView,
+  type: WeaponVisualType | undefined,
+  rarity: ItemRarity | undefined,
+): void {
+  if (view.weaponVisual) {
+    view.weaponAnchor.remove(view.weaponVisual.group);
+    view.weaponVisual.dispose();
+    view.weaponVisual = null;
+  }
+  if (!type) return;
+  view.weaponVisual = buildWeaponVisual(type, rarity, getColors().weapon);
+  view.weaponAnchor.add(view.weaponVisual.group);
 }
 
 export function setActorVisible(view: ActorView, on: boolean): void {
@@ -207,6 +232,7 @@ export function startActorDeath(
   view.lunge = null;
   view.dying = 0;
   view.mesh.visible = false;
+  view.weaponAnchor.visible = false;
   if (view.dust) {
     disposeDustBurst(view.dust, scene);
     view.dust = null;
@@ -228,6 +254,9 @@ export function retintActor(view: ActorView, elite = false): void {
   m.emissiveIntensity = elite ? ELITE_EMISSIVE_INTENSITY : style.emissive ? 0.45 : 0;
   const scale = elite ? ELITE_SCALE : 1;
   view.mesh.scale.set(style.sizeMul * scale, style.yScale * scale, style.sizeMul * scale);
+  if (view.weaponVisual) {
+    retintWeaponVisual(view.weaponVisual, elite ? "fine" : undefined, getColors().weapon);
+  }
 }
 
 export function disposeActorView(view: ActorView, scene: Scene): void {
@@ -240,4 +269,5 @@ export function disposeActorView(view: ActorView, scene: Scene): void {
   const mat = view.mesh.material;
   if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
   else mat.dispose();
+  view.weaponVisual?.dispose();
 }

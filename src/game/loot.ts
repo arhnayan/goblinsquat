@@ -2,8 +2,10 @@ import type { Rng } from "./rng";
 import {
   makeArmor,
   makePotion,
+  makeTrinket,
   makeWeapon,
   pickArmor,
+  pickTrinket,
   pickWeapon,
   potionHeal,
   type Item,
@@ -123,6 +125,23 @@ export function rollLootArmor(
 ): Item {
   const item = makeArmor(x, z, pickArmor(depth, rng));
   return applyRarity(item, depth, rng, minRarity);
+}
+
+export function rollLootTrinket(
+  depth: number,
+  rng: Rng,
+  x: number,
+  z: number,
+  minRarity?: ItemRarity,
+): Item {
+  const item = makeTrinket(x, z, pickTrinket(depth, rng));
+  const rarity = rollRarity(depth, rng, minRarity ?? "common");
+  const rarityIndex = RARITY_ORDER.indexOf(rarity);
+  item.rarity = rarity;
+  item.trinketMagnitude = (item.trinketMagnitude ?? 0) * (1 + 0.15 * rarityIndex);
+  item.price = Math.round((item.price ?? 0) * RARITY_PRICE_MUL[rarity]);
+  item.name = composeItemName(item.name, rarity, []);
+  return item;
 }
 
 function potionWeights(depth: number): Record<PotionKind, number> {
