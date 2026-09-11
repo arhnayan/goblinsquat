@@ -217,6 +217,11 @@ export function applyCssVars(): void {
   root.style.setProperty("--edge", hexCss(c.wall));
   root.style.setProperty("--panel", hexCss(c.void));
   root.style.setProperty("--gold", hexCss(c.gold));
+  root.style.setProperty("--c-potion", hexCss(c.potion));
+  root.style.setProperty("--c-weapon", hexCss(c.weapon));
+  root.style.setProperty("--c-armor", hexCss(c.armor));
+  root.style.setProperty("--c-food", hexCss(c.food));
+  root.style.setProperty("--c-amulet", hexCss(c.amulet));
 }
 
 export function setTheme(name: ThemeName): Theme {

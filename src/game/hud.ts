@@ -2,7 +2,7 @@ import type { Run } from "./run";
 import type { HudMotion } from "./camera";
 import { getTheme } from "./theme";
 import { countKind, itemTag } from "./inventory";
-import { packLetter } from "./catalog";
+import { packLetter, type Item, type ItemKind } from "./catalog";
 import { describeStatuses, hasStatus } from "./status";
 import { canSell, sellPrice, type ShopState } from "./shop";
 
@@ -82,6 +82,9 @@ export function createHud(): Hud {
   const lines: string[] = [];
   let lookText: string | null = null;
   let hooks: HudHooks | null = null;
+  let prevHp: number | null = null;
+  let prevGold: number | null = null;
+  let prevDepth: number | null = null;
 
   status.classList.add("panel", "hud-float");
   logBox.classList.add("panel", "hud-float");
@@ -118,10 +121,79 @@ export function createHud(): Hud {
     return node;
   };
 
+  const chipGlyph = (text: string, glyph: string, colorVar: string, kind = ""): HTMLElement => {
+    const node = chip(text, kind);
+    const g = document.createElement("i");
+    g.className = "chip-glyph";
+    g.style.color = colorVar;
+    g.textContent = glyph;
+    node.prepend(g);
+    return node;
+  };
+
+  const kindColorVar = (kind: ItemKind): string => {
+    switch (kind) {
+      case "potion":
+        return "var(--c-potion)";
+      case "weapon":
+        return "var(--c-weapon)";
+      case "armor":
+        return "var(--c-armor)";
+      case "food":
+        return "var(--c-food)";
+      case "amulet":
+        return "var(--c-amulet)";
+      case "gold":
+      default:
+        return "var(--gold)";
+    }
+  };
+
+  const enterPanel = (node: HTMLElement) => {
+    node.classList.remove("is-entering");
+    void node.offsetWidth;
+    node.classList.add("is-entering");
+    window.setTimeout(() => node.classList.remove("is-entering"), 360);
+  };
+
+  const packRow = (letter: string, item: Item, name: string, price?: string): HTMLLIElement => {
+    const row = document.createElement("li");
+    row.className = "pack-row";
+    const key = document.createElement("kbd");
+    key.className = "pack-key";
+    key.textContent = letter;
+    const glyph = document.createElement("i");
+    glyph.className = "pack-glyph";
+    glyph.style.color = kindColorVar(item.kind);
+    glyph.textContent = item.glyph;
+    const nameEl = document.createElement("span");
+    nameEl.className = "pack-name";
+    nameEl.textContent = name;
+    row.append(key, glyph, nameEl);
+    if (price) {
+      const priceEl = document.createElement("span");
+      priceEl.className = "pack-price";
+      priceEl.textContent = price;
+      row.append(priceEl);
+    }
+    return row;
+  };
+
+
   const refresh = (run: Run) => {
+    const hit = prevHp !== null && run.hp < prevHp;
+    const low = run.maxHp > 0 && run.hp / run.maxHp <= 0.25;
+    const goldUp = prevGold !== null && run.gold > prevGold;
+    const depthUp = prevDepth !== null && run.depth > prevDepth;
+    prevHp = run.hp;
+    prevGold = run.gold;
+    prevDepth = run.depth;
+
     status.replaceChildren();
     const hpRow = document.createElement("div");
     hpRow.className = "hp-row";
+    if (low) hpRow.classList.add("is-low");
+    if (hit) hpRow.classList.add("is-hit");
     const hpLabel = document.createElement("span");
     hpLabel.className = "hp-label";
     hpLabel.textContent = `HP ${run.hp}/${run.maxHp}`;
@@ -140,21 +212,25 @@ export function createHud(): Hud {
 
     const chips = document.createElement("div");
     chips.className = "chips";
+    const goldChip = chipGlyph(`$${run.gold}`, "$", "var(--gold)", "gold");
+    if (goldUp) goldChip.classList.add("is-bloom");
+    const depthChip = chip(`D${run.depth}`);
+    if (depthUp) depthChip.classList.add("is-bloom");
     chips.append(
       chip(`ATK ${run.atk}`),
       chip(`DEF ${run.def}`),
-      chip(`D${run.depth}`),
-      chip(`$${run.gold}`, "gold"),
-      chip(`p${countKind(run, "potion")}`),
+      depthChip,
+      goldChip,
+      chipGlyph(`p${countKind(run, "potion")}`, "!", "var(--c-potion)"),
     );
-    if (run.hasAmulet) chips.append(chip("* amulet", "gold"));
+    if (run.hasAmulet) chips.append(chipGlyph("amulet", "*", "var(--c-amulet)", "gold"));
     for (const s of describeStatuses(run)) {
       chips.append(chip(`${s.kind} ${s.turns}`, "warn"));
     }
     const w = run.pack.find((i) => i.id === run.weaponId);
     const a = run.pack.find((i) => i.id === run.armorId);
-    if (w) chips.append(chip(w.name));
-    if (a) chips.append(chip(a.name));
+    if (w) chips.append(chipGlyph(w.name, ")", "var(--c-weapon)"));
+    if (a) chips.append(chipGlyph(a.name, "]", "var(--c-armor)"));
     chips.append(chip(`seed ${run.seed}`), chip(getTheme().name));
     status.append(hpRow, chips);
   };
@@ -166,11 +242,13 @@ export function createHud(): Hud {
       overlayBox.replaceChildren();
       return;
     }
+    const wasHidden = overlayBox.hidden;
     overlayBox.hidden = false;
     const body = document.createElement("div");
     body.className = "overlay-body";
     body.textContent = text;
     overlayBox.replaceChildren(body);
+    if (wasHidden) enterPanel(overlayBox);
   };
 
   const wireTitle = (seedInput: HTMLInputElement) => {
@@ -188,6 +266,7 @@ export function createHud(): Hud {
   };
 
   const showTitle = (seedBuf: string) => {
+    const wasHidden = overlayBox.hidden;
     overlayBox.hidden = false;
     overlayBox.classList.add("is-title", "is-interactive");
     const existing = overlayBox.querySelector<HTMLInputElement>("#seed-input");
@@ -235,6 +314,7 @@ export function createHud(): Hud {
     overlayBox.replaceChildren(card);
     wireTitle(input);
     hint.textContent = "enter start  ? help  F pixel  C palette";
+    if (wasHidden) enterPanel(overlayBox);
   };
 
   const showHelp = () => {
@@ -243,6 +323,7 @@ export function createHud(): Hud {
   };
 
   const showPack = (run: Run) => {
+    const wasHidden = packBox.hidden;
     packBox.hidden = false;
     packBox.replaceChildren();
     const head = document.createElement("div");
@@ -258,13 +339,7 @@ export function createHud(): Hud {
       const list = document.createElement("ul");
       list.className = "pack-list";
       run.pack.forEach((it, i) => {
-        const row = document.createElement("li");
-        row.className = "pack-row";
-        const letter = document.createElement("kbd");
-        letter.textContent = packLetter(i);
-        const name = document.createElement("span");
-        name.textContent = `${it.name}${itemTag(run, it)}`;
-        row.append(letter, name);
+        const row = packRow(packLetter(i), it, `${it.name}${itemTag(run, it)}`);
         row.addEventListener("click", (e) => {
           if (e.shiftKey) hooks?.onPackDrop(i);
           else hooks?.onPackUse(i);
@@ -278,6 +353,7 @@ export function createHud(): Hud {
     foot.textContent = "letter use  shift+letter drop  i close";
     packBox.append(foot);
     hint.textContent = "letter use  shift+letter drop  i close";
+    if (wasHidden) enterPanel(packBox);
   };
 
   const hidePack = () => {
@@ -286,6 +362,7 @@ export function createHud(): Hud {
   };
 
   const showShop = (run: Run, shop: ShopState) => {
+    const wasHidden = packBox.hidden;
     packBox.hidden = false;
     packBox.replaceChildren();
     const head = document.createElement("div");
@@ -301,13 +378,7 @@ export function createHud(): Hud {
       const list = document.createElement("ul");
       list.className = "pack-list";
       shop.offers.forEach((offer, i) => {
-        const row = document.createElement("li");
-        row.className = "pack-row";
-        const letter = document.createElement("kbd");
-        letter.textContent = packLetter(i);
-        const name = document.createElement("span");
-        name.textContent = `${offer.item.name}  $${offer.price}`;
-        row.append(letter, name);
+        const row = packRow(packLetter(i), offer.item, offer.item.name, `$${offer.price}`);
         row.addEventListener("click", () => hooks?.onShopBuy(i));
         list.append(row);
       });
@@ -326,14 +397,8 @@ export function createHud(): Hud {
       const list = document.createElement("ul");
       list.className = "pack-list";
       run.pack.forEach((it, i) => {
-        const row = document.createElement("li");
-        row.className = "pack-row";
-        const letter = document.createElement("kbd");
-        letter.textContent = packLetter(i);
-        const name = document.createElement("span");
-        const worth = canSell(it) ? `  $${sellPrice(it)}` : "";
-        name.textContent = `${it.name}${itemTag(run, it)}${worth}`;
-        row.append(letter, name);
+        const worth = canSell(it) ? `$${sellPrice(it)}` : undefined;
+        const row = packRow(packLetter(i), it, `${it.name}${itemTag(run, it)}`, worth);
         row.addEventListener("click", (e) => {
           if (e.shiftKey) hooks?.onShopSell(i);
         });
@@ -346,14 +411,17 @@ export function createHud(): Hud {
     foot.textContent = "letter buy  shift+letter sell  esc close";
     packBox.append(foot);
     hint.textContent = "letter buy  shift+letter sell  esc close";
+    if (wasHidden) enterPanel(packBox);
   };
 
   const setLook = (text: string | null) => {
     lookText = text;
     if (text) {
+      const wasHidden = lookBox.hidden;
       lookBox.hidden = false;
       lookBox.textContent = text;
       hint.textContent = "x/esc stop looking";
+      if (wasHidden) enterPanel(lookBox);
     } else {
       lookBox.hidden = true;
       lookBox.textContent = "";
@@ -387,6 +455,7 @@ export function createHud(): Hud {
         Math.sin(time * 1.75 + panel.phase) * panel.bob;
       const roll =
         Math.sin(time * 1.05 + panel.phase * 1.4) * panel.tilt;
+      panel.node.style.setProperty("--float-lift", py.toFixed(2));
       panel.node.style.transform = panel.centered
         ? `translate(calc(-50% + ${px}px), calc(-50% + ${py}px)) rotate(${roll}deg)`
         : `translate(${px}px, ${py}px) rotate(${roll}deg)`;
