@@ -195,6 +195,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     seedTyped = false;
     closeLook();
     hud.hidePack();
+    hud.hideInventory();
     seedBuf = String(run.seed);
     hud.showTitle(seedBuf);
     player.setEnabled(false);
@@ -204,6 +205,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     mode = "play";
     hud.overlay(null);
     hud.hidePack();
+    hud.hideInventory();
     hud.setLook(null);
     hud.setHint(PLAY_HINT);
     syncInput();
@@ -219,6 +221,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     hud.clearLog();
     hud.overlay(null);
     hud.hidePack();
+    hud.hideInventory();
     hud.setLook(null);
     run = newRun(seed);
     floor = run.floors.get(1)!;
@@ -529,7 +532,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     const msg = usePackItem(run, index);
     hud.log(msg);
     hud.refresh(run);
-    closeInventory();
+    if (mode === "inventory") hud.showInventory(run);
+    else closeInventory();
     if (!spendTurn()) return;
     beginEnemyTurn();
   }
@@ -550,7 +554,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     placeItem(it, spot.x, spot.z);
     hud.log(`you drop ${aAn(it.name)}`);
     hud.refresh(run);
-    closeInventory();
+    if (mode === "inventory") hud.showInventory(run);
+    else closeInventory();
     if (!spendTurn()) return;
     beginEnemyTurn();
   }
@@ -559,17 +564,17 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     if (run.status !== "play" || phase !== "idle") return;
     cancelRest(true);
     mode = "inventory";
-    hud.showPack(run);
+    hud.showInventory(run);
     player.setEnabled(false);
   }
 
   function closeInventory(): void {
     if (mode !== "inventory") {
-      if (mode !== "shop") hud.hidePack();
+      hud.hideInventory();
       return;
     }
     mode = "play";
-    hud.hidePack();
+    hud.hideInventory();
     hud.setHint(PLAY_HINT);
     syncInput();
   }
@@ -714,8 +719,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     } else {
       cancelRest(true);
     }
-    if (mode === "inventory" || mode === "shop") hud.hidePack();
-    else closeInventory();
+    if (mode === "inventory") hud.hideInventory();
+    else if (mode === "shop") hud.hidePack();
     mode = "help";
     hud.showHelp();
     player.setEnabled(false);
@@ -737,7 +742,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     if (helpFrom === "inventory") {
       mode = "inventory";
       hud.overlay(null);
-      hud.showPack(run);
+      hud.showInventory(run);
       player.setEnabled(false);
       return;
     }
@@ -1048,6 +1053,21 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     handleMoveOrWait(intent);
   }
 
+  function arrowDelta(code: string): { dx: number; dz: number } | null {
+    switch (code) {
+      case "ArrowUp":
+        return { dx: 0, dz: -1 };
+      case "ArrowDown":
+        return { dx: 0, dz: 1 };
+      case "ArrowLeft":
+        return { dx: -1, dz: 0 };
+      case "ArrowRight":
+        return { dx: 1, dz: 0 };
+      default:
+        return null;
+    }
+  }
+
   function enemiesBusy(): boolean {
     for (const v of monsterViews.values()) {
       if (v.hop || v.lunge) return true;
@@ -1148,6 +1168,12 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       if (e.key === "?" || (e.code === "Slash" && e.shiftKey)) {
         e.preventDefault();
         openHelp();
+        return;
+      }
+      const d = arrowDelta(e.code);
+      if (d) {
+        e.preventDefault();
+        hud.moveInventorySelection(run, d.dx, d.dz);
         return;
       }
       const idx = letterIndex(e.code);
