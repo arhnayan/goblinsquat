@@ -14,12 +14,14 @@ export type Run = {
   def: number;
   weaponId: number | null;
   armorId: number | null;
+  trinketId: number | null;
   pack: Item[];
   gold: number;
   statuses: Status[];
   turns: number;
   hasAmulet: boolean;
   shopSpawned: boolean;
+  usedRevive: boolean;
   status: "play" | "dead" | "won";
   floors: Map<number, Floor>;
 };
@@ -38,12 +40,14 @@ export function newRun(seed = Date.now() >>> 0): Run {
     def: 0,
     weaponId: null,
     armorId: null,
+    trinketId: null,
     pack: [],
     gold: 0,
     statuses: [],
     turns: 0,
     hasAmulet: false,
     shopSpawned: false,
+    usedRevive: false,
     status: "play",
     floors,
   };

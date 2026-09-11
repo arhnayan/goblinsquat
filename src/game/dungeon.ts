@@ -69,7 +69,7 @@ export function describeTile(ch: string): string {
   if (ch === ">") return "a staircase down";
   if (ch === "<") return "a staircase up";
   if (ch === " ") return "void";
-  if (ch === "^" || ch === "'") return "floor";
+  if (ch === "^" || ch === "'" || ch === ":") return "floor";
   if (ch === '"') return "rubble";
   if (ch === "=") return "embers";
   if (ch === "M") return "a merchant";
@@ -137,7 +137,7 @@ function themedWall(base: number): number {
 
 export function tileStyle(ch: string): TileStyle {
   const PALETTE = getColors();
-  if (ch === "." || ch === "^" || ch === "'") {
+  if (ch === "." || ch === "^" || ch === "'" || ch === ":") {
     return {
       color: themedFloor(PALETTE.floor),
       yScale: 0.9,
@@ -245,6 +245,16 @@ export function tileStyle(ch: string): TileStyle {
       emissive: 0,
       roughness: 0.46,
       metalness: 0.26,
+    };
+  }
+  if (ch === "0") {
+    return {
+      color: PALETTE.trinket,
+      yScale: 0.75,
+      sizeMul: 0.95,
+      emissive: PALETTE.trinket,
+      roughness: 0.32,
+      metalness: 0.22,
     };
   }
   if (ch === "%") {

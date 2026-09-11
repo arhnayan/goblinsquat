@@ -23,6 +23,8 @@ import {
   volumeScaleXZ,
 } from "./anim";
 import { makeFitScale, makeGlyphGeometry } from "./glyphs";
+import type { Item } from "./catalog";
+import { buildWeaponVisual, retintWeaponVisual, type WeaponVisual } from "./weapons";
 
 export type PlayerIntent =
   | { type: "move"; dx: number; dz: number }
@@ -45,6 +47,8 @@ export type Player = HopRig & {
   startLunge: (dx: number, dz: number) => void;
   place: (x: number, z: number) => void;
   retint: () => void;
+  setWeapon: (item: Item | null) => void;
+  setNightlight: (on: boolean) => void;
   update: (
     dt: number,
     time: number,
@@ -136,15 +140,21 @@ export function createPlayer(
   const hopGroup = new Object3D();
   const squash = new Object3D();
   const lean = new Object3D();
+  const weaponAnchor = new Object3D();
+  weaponAnchor.position.set(0.34, 0.55, 0.1);
+  weaponAnchor.rotation.set(0, FACE_YAW, -0.15);
   lean.add(glyph);
+  lean.add(weaponAnchor);
   squash.add(lean);
   hopGroup.add(squash);
   root.add(hopGroup);
 
-  const torch = new PointLight(c.player, 5.6, 12.5, 1.3);
+  const BASE_TORCH_DISTANCE = 12.5;
+  const BASE_BOUNCE_DISTANCE = 20;
+  const torch = new PointLight(c.player, 5.6, BASE_TORCH_DISTANCE, 1.3);
   torch.position.set(0, 1.35, 0);
   root.add(torch);
-  const bounce = new PointLight(c.player, 1.45, 20, 1.12);
+  const bounce = new PointLight(c.player, 1.45, BASE_BOUNCE_DISTANCE, 1.12);
   bounce.position.set(0, 2.2, 0);
   root.add(bounce);
 
@@ -163,6 +173,8 @@ export function createPlayer(
   let gridX = x;
   let gridZ = z;
   let thrusting = false;
+  let weaponVisual: WeaponVisual | null = null;
+  let weaponItem: Item | null = null;
 
   const onDown = (e: KeyboardEvent) => {
     if (!enabled || e.repeat) return;
@@ -327,12 +339,34 @@ export function createPlayer(
     return result;
   };
 
+  const setWeapon = (item: Item | null) => {
+    if (weaponVisual) {
+      weaponAnchor.remove(weaponVisual.group);
+      weaponVisual.dispose();
+      weaponVisual = null;
+    }
+    weaponItem = item && item.kind === "weapon" ? item : null;
+    if (!weaponItem) return;
+    weaponVisual = buildWeaponVisual(
+      weaponItem.weaponVisualType ?? "sword",
+      weaponItem.rarity,
+      getColors().weapon,
+    );
+    weaponAnchor.add(weaponVisual.group);
+  };
+
+  const setNightlight = (on: boolean) => {
+    torch.distance = on ? BASE_TORCH_DISTANCE * 1.4 : BASE_TORCH_DISTANCE;
+    bounce.distance = on ? BASE_BOUNCE_DISTANCE * 1.4 : BASE_BOUNCE_DISTANCE;
+  };
+
   const retint = () => {
     const col = getColors();
     mat.color.setHex(col.player);
     mat.emissive.setHex(col.player);
     torch.color.setHex(col.player);
     bounce.color.setHex(col.player);
+    if (weaponVisual) retintWeaponVisual(weaponVisual, weaponItem?.rarity, col.weapon);
   };
 
   const dispose = (sc: Scene) => {
@@ -344,6 +378,7 @@ export function createPlayer(
     mat.dispose();
     torch.dispose();
     bounce.dispose();
+    weaponVisual?.dispose();
   };
 
   const player: Player = {
@@ -378,6 +413,8 @@ export function createPlayer(
     startLunge,
     place,
     retint,
+    setWeapon,
+    setNightlight,
     update,
     dispose,
   };

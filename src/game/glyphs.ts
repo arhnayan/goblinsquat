@@ -182,7 +182,7 @@ export function buildGlyphWorld(
     for (let x = 0; x < dungeon.width; x++) {
       const ch = charAt(dungeon, x, z);
       if (!shouldDraw(ch)) continue;
-      const draw = ch === "^" || ch === "'" ? "." : ch;
+      const draw = ch === "^" || ch === "'" || ch === ":" ? "." : ch;
       let list = groups.get(draw);
       if (!list) {
         list = [];

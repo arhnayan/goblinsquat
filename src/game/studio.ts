@@ -1,6 +1,7 @@
 import {
   blankArmor,
   blankMonster,
+  blankTrinket,
   blankWeapon,
   catalogWarnings,
   cloneCatalog,
@@ -10,9 +11,14 @@ import {
   persistCatalog,
   resetCatalog,
   slugId,
+  TRINKET_EFFECT_KINDS,
+  WEAPON_VISUAL_TYPES,
   type ArmorDef,
   type MonsterDef,
+  type TrinketDef,
+  type TrinketEffectKind,
   type WeaponDef,
+  type WeaponVisualType,
 } from "./catalog";
 import { isFormTarget } from "./dom";
 import {
@@ -23,7 +29,7 @@ import {
   type ThemeColorKey,
 } from "./theme";
 
-type Tab = "beasts" | "steel" | "hide" | "vitals";
+type Tab = "beasts" | "steel" | "hide" | "charms" | "vitals";
 
 export function mountStudio(root: HTMLElement): void {
   let draft = cloneCatalog(getCatalog());
@@ -37,19 +43,21 @@ export function mountStudio(root: HTMLElement): void {
 
   const warn = () => catalogWarnings(draft);
 
-  const taken = (kind: "monsters" | "weapons" | "armors") =>
+  const taken = (kind: "monsters" | "weapons" | "armors" | "trinkets") =>
     new Set(draft[kind].map((row) => row.id));
 
   const selectFirst = (next: Tab) => {
     if (next === "beasts") selected = draft.monsters[0]?.id ?? "";
     else if (next === "steel") selected = draft.weapons[0]?.id ?? "";
     else if (next === "hide") selected = draft.armors[0]?.id ?? "";
+    else if (next === "charms") selected = draft.trinkets[0]?.id ?? "";
     else selected = "";
   };
 
   const currentMonster = () => draft.monsters.find((m) => m.id === selected);
   const currentWeapon = () => draft.weapons.find((w) => w.id === selected);
   const currentArmor = () => draft.armors.find((a) => a.id === selected);
+  const currentTrinket = () => draft.trinkets.find((t) => t.id === selected);
 
   const save = () => {
     persistCatalog(draft);
@@ -118,6 +126,10 @@ export function mountStudio(root: HTMLElement): void {
       const row = blankArmor(taken("armors"));
       draft.armors.push(row);
       selected = row.id;
+    } else if (tab === "charms") {
+      const row = blankTrinket(taken("trinkets"));
+      draft.trinkets.push(row);
+      selected = row.id;
     }
     note = "added. save when ready";
     render();
@@ -144,6 +156,13 @@ export function mountStudio(root: HTMLElement): void {
       const ids = taken("armors");
       const copy: ArmorDef = { ...src, id: slugId(src.id, ids), name: `${src.name} 2` };
       draft.armors.push(copy);
+      selected = copy.id;
+    } else if (tab === "charms") {
+      const src = currentTrinket();
+      if (!src) return;
+      const ids = taken("trinkets");
+      const copy: TrinketDef = { ...src, id: slugId(src.id, ids), name: `${src.name} 2` };
+      draft.trinkets.push(copy);
       selected = copy.id;
     }
     note = "duplicated. save when ready";
@@ -172,6 +191,13 @@ export function mountStudio(root: HTMLElement): void {
         return;
       }
       draft.armors = draft.armors.filter((a) => a.id !== selected);
+    } else if (tab === "charms") {
+      if (draft.trinkets.length <= 1) {
+        note = "keep at least one charm";
+        render();
+        return;
+      }
+      draft.trinkets = draft.trinkets.filter((t) => t.id !== selected);
     } else return;
     selectFirst(tab);
     note = "removed from draft. save to commit";
@@ -198,6 +224,7 @@ export function mountStudio(root: HTMLElement): void {
       ["beasts", "beasts"],
       ["steel", "steel"],
       ["hide", "hide"],
+      ["charms", "charms"],
       ["vitals", "vitals"],
     ] as const) {
       const b = btn(label, tab === id ? "btn tab is-on" : "btn tab");
@@ -251,6 +278,10 @@ export function mountStudio(root: HTMLElement): void {
       for (const row of draft.weapons) {
         list.append(listItem(row.id, row.name, ")", null));
       }
+    } else if (tab === "charms") {
+      for (const row of draft.trinkets) {
+        list.append(listItem(row.id, row.name, "0", null));
+      }
     } else {
       for (const row of draft.armors) {
         list.append(listItem(row.id, row.name, "]", null));
@@ -273,6 +304,9 @@ export function mountStudio(root: HTMLElement): void {
     } else if (tab === "steel") {
       const w = currentWeapon();
       if (w) form.append(weaponForm(w));
+    } else if (tab === "charms") {
+      const t = currentTrinket();
+      if (t) form.append(trinketForm(t));
     } else {
       const a = currentArmor();
       if (a) form.append(armorForm(a));
@@ -360,6 +394,7 @@ export function mountStudio(root: HTMLElement): void {
       })),
       field("weight", numInput(m.weight, 0, 999, (v) => (m.weight = v))),
       field("range", numInput(m.range, 1, 8, (v) => (m.range = v))),
+      field("wields", wieldsSelect(m.wieldsVisualType, (v) => (m.wieldsVisualType = v))),
       field("y scale", numInput(m.yScale, 0.3, 2.5, (v) => (m.yScale = v), 0.05)),
       field("size", numInput(m.sizeMul, 0.5, 2, (v) => (m.sizeMul = v), 0.05)),
     );
@@ -419,6 +454,25 @@ export function mountStudio(root: HTMLElement): void {
       field("atk", numInput(w.atk, 0, 99, (v) => (w.atk = v))),
       field("min depth", numInput(w.minDepth, 1, 99, (v) => (w.minDepth = v))),
       field("price", numInput(w.price ?? w.atk * 8, 0, 999, (v) => (w.price = v))),
+      field("visual", weaponVisualSelect(w.visualType, (v) => (w.visualType = v))),
+    );
+    return wrap;
+  };
+
+  const trinketForm = (t: TrinketDef): HTMLElement => {
+    const wrap = el("form", "form-grid");
+    wrap.addEventListener("submit", (e) => e.preventDefault());
+    wrap.append(
+      field("name", textInput(t.name, (v) => (t.name = v))),
+      field("id", textInput(t.id, (v) => {
+        const next = slugId(v || t.name, new Set([...taken("trinkets")].filter((id) => id !== t.id)));
+        t.id = next;
+        selected = next;
+      })),
+      field("effect", trinketEffectSelect(t.effect, (v) => (t.effect = v))),
+      field("magnitude", numInput(t.magnitude ?? 0, 0, 99, (v) => (t.magnitude = v), 0.05)),
+      field("min depth", numInput(t.minDepth, 1, 99, (v) => (t.minDepth = v))),
+      field("price", numInput(t.price ?? 24, 0, 999, (v) => (t.price = v))),
     );
     return wrap;
   };
@@ -546,6 +600,61 @@ function paletteSelect(
     sel.append(opt);
   }
   sel.addEventListener("change", () => onChange(sel.value as ThemeColorKey));
+  return sel;
+}
+
+function weaponVisualSelect(
+  value: WeaponVisualType,
+  onChange: (v: WeaponVisualType) => void,
+): HTMLSelectElement {
+  const sel = document.createElement("select");
+  for (const key of WEAPON_VISUAL_TYPES) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = key;
+    if (key === value) opt.selected = true;
+    sel.append(opt);
+  }
+  sel.addEventListener("change", () => onChange(sel.value as WeaponVisualType));
+  return sel;
+}
+
+function wieldsSelect(
+  value: WeaponVisualType | undefined,
+  onChange: (v: WeaponVisualType | undefined) => void,
+): HTMLSelectElement {
+  const sel = document.createElement("select");
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "none";
+  if (!value) noneOpt.selected = true;
+  sel.append(noneOpt);
+  for (const key of WEAPON_VISUAL_TYPES) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = key;
+    if (key === value) opt.selected = true;
+    sel.append(opt);
+  }
+  sel.addEventListener("change", () => {
+    onChange(sel.value ? (sel.value as WeaponVisualType) : undefined);
+  });
+  return sel;
+}
+
+function trinketEffectSelect(
+  value: TrinketEffectKind,
+  onChange: (v: TrinketEffectKind) => void,
+): HTMLSelectElement {
+  const sel = document.createElement("select");
+  for (const key of TRINKET_EFFECT_KINDS) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = key;
+    if (key === value) opt.selected = true;
+    sel.append(opt);
+  }
+  sel.addEventListener("change", () => onChange(sel.value as TrinketEffectKind));
   return sel;
 }
 

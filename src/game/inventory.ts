@@ -3,9 +3,11 @@ import {
   foodHeal,
   PACK_SIZE,
   potionHeal,
+  TRINKET_EFFECT_DEFAULTS,
   UNARMED_ATK,
   type Item,
   type ItemKind,
+  type TrinketEffectKind,
 } from "./catalog";
 import type { Run } from "./run";
 import { clearStatuses, hasAnyStatus } from "./status";
@@ -21,6 +23,20 @@ export function equippedAffixes(run: Run, slot: "weapon" | "armor"): string[] {
   const id = slot === "weapon" ? run.weaponId : run.armorId;
   const item = run.pack.find((i) => i.id === id);
   return item?.affixIds ?? [];
+}
+
+export function equippedTrinket(run: Run): Item | null {
+  return run.pack.find((i) => i.id === run.trinketId) ?? null;
+}
+
+export function hasTrinketEffect(run: Run, effect: TrinketEffectKind): boolean {
+  return equippedTrinket(run)?.trinketEffect === effect;
+}
+
+export function trinketMagnitude(run: Run, effect: TrinketEffectKind): number {
+  const t = equippedTrinket(run);
+  if (t?.trinketEffect !== effect) return 0;
+  return t.trinketMagnitude ?? TRINKET_EFFECT_DEFAULTS[effect];
 }
 
 export function packFull(run: Run): boolean {
@@ -44,7 +60,12 @@ export function firstOfKind(run: Run, kind: ItemKind): number {
 export function itemTag(run: Run, item: Item): string {
   if (item.id === run.weaponId) return " (wielded)";
   if (item.id === run.armorId) return " (worn)";
+  if (item.id === run.trinketId) return " (bound)";
   return "";
+}
+
+function healAmount(run: Run, base: number): number {
+  return Math.round(base * (1 + trinketMagnitude(run, "gourmand")));
 }
 
 export function usePackItem(run: Run, index: number): string {
@@ -56,7 +77,7 @@ export function usePackItem(run: Run, index: number): string {
     if (kind === "antidote") {
       const afflicted = hasAnyStatus(run);
       clearStatuses(run);
-      run.hp = Math.min(run.maxHp, run.hp + Math.ceil(potionHeal() / 2));
+      run.hp = Math.min(run.maxHp, run.hp + healAmount(run, Math.ceil(potionHeal() / 2)));
       return afflicted ? "the antidote purges the sickness" : "the antidote does little";
     }
     if (kind === "vigor") {
@@ -67,7 +88,7 @@ export function usePackItem(run: Run, index: number): string {
     const afflicted = hasAnyStatus(run);
     clearStatuses(run);
     if (run.hp >= run.maxHp && !afflicted) return "the potion does nothing";
-    run.hp = Math.min(run.maxHp, run.hp + potionHeal());
+    run.hp = Math.min(run.maxHp, run.hp + healAmount(run, potionHeal()));
     if (afflicted && run.hp >= run.maxHp) return "your blood clears";
     if (afflicted) return "you feel better, and the sickness fades";
     return "you feel better";
@@ -75,7 +96,7 @@ export function usePackItem(run: Run, index: number): string {
   if (it.kind === "food") {
     run.pack.splice(index, 1);
     if (run.hp >= run.maxHp) return "you are already full";
-    run.hp = Math.min(run.maxHp, run.hp + foodHeal());
+    run.hp = Math.min(run.maxHp, run.hp + healAmount(run, foodHeal()));
     return "you eat the ration";
   }
   if (it.kind === "weapon") {
@@ -88,6 +109,10 @@ export function usePackItem(run: Run, index: number): string {
     syncStats(run);
     return `you put on the ${it.name}`;
   }
+  if (it.kind === "trinket") {
+    run.trinketId = it.id;
+    return `you fasten the ${it.name}`;
+  }
   return "you cannot use that";
 }
 
@@ -97,6 +122,7 @@ export function takeFromPack(run: Run, index: number): Item | null {
   run.pack.splice(index, 1);
   if (run.weaponId === it.id) run.weaponId = null;
   if (run.armorId === it.id) run.armorId = null;
+  if (run.trinketId === it.id) run.trinketId = null;
   syncStats(run);
   return it;
 }

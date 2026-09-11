@@ -139,6 +139,8 @@ export function createHud(): Hud {
         return "var(--c-weapon)";
       case "armor":
         return "var(--c-armor)";
+      case "trinket":
+        return "var(--c-trinket)";
       case "food":
         return "var(--c-food)";
       case "amulet":
@@ -229,8 +231,10 @@ export function createHud(): Hud {
     }
     const w = run.pack.find((i) => i.id === run.weaponId);
     const a = run.pack.find((i) => i.id === run.armorId);
+    const t = run.pack.find((i) => i.id === run.trinketId);
     if (w) chips.append(chipGlyph(w.name, ")", "var(--c-weapon)"));
     if (a) chips.append(chipGlyph(a.name, "]", "var(--c-armor)"));
+    if (t) chips.append(chipGlyph(t.name, "0", "var(--c-trinket)"));
     chips.append(chip(`seed ${run.seed}`), chip(getTheme().name));
     status.append(hpRow, chips);
   };

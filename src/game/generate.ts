@@ -20,12 +20,12 @@ import {
   type Monster,
   type MonsterKind,
 } from "./catalog";
-import { eliteChance, rollLootArmor, rollLootWeapon, rollPotion } from "./loot";
+import { eliteChance, rollLootArmor, rollLootTrinket, rollLootWeapon, rollPotion } from "./loot";
 import { generateShopOffers, type ShopState } from "./shop";
 
 export type { Item, Monster, MonsterKind };
 
-export type RoomKind = "spawn" | "normal" | "treasure" | "shop" | "arena" | "nest";
+export type RoomKind = "spawn" | "normal" | "treasure" | "shop" | "arena" | "nest" | "shrine";
 
 export type RoomMeta = {
   x: number;
@@ -367,6 +367,10 @@ function assignKinds(
     claim("arena", (r) => r.w >= 6 && r.h >= 6);
   }
 
+  if (depth >= 3 && rng.chance(0.22)) {
+    claim("shrine", (r) => r.w >= 4 && r.h >= 4);
+  }
+
   if (rng.chance(0.3)) {
     claim("nest", () => true);
   }
@@ -437,6 +441,13 @@ function canTrap(ch: string): boolean {
   return ch === "." || ch === '"' ;
 }
 
+function trapGlyph(rng: Rng): string {
+  const n = rng.next();
+  if (n < 0.48) return "^";
+  if (n < 0.86) return "'";
+  return ":";
+}
+
 function scatterCorridorTraps(
   tiles: string[][],
   rooms: RoomMeta[],
@@ -452,7 +463,7 @@ function scatterCorridorTraps(
       if (!canTrap(tiles[z]![x]!)) continue;
       if (avoidKeys.has(`${x},${z}`)) continue;
       if (!rng.chance(0.08)) continue;
-      tiles[z]![x] = rng.chance(0.55) ? "^" : "'";
+      tiles[z]![x] = trapGlyph(rng);
     }
   }
 }
@@ -475,7 +486,7 @@ function scatterRoomTraps(
       const z = r.z + rng.int(r.h);
       if (!canTrap(tiles[z]![x]!)) continue;
       if (avoidKeys.has(`${x},${z}`)) continue;
-      tiles[z]![x] = rng.chance(0.5) ? "^" : "'";
+      tiles[z]![x] = trapGlyph(rng);
       avoidKeys.add(`${x},${z}`);
       placed += 1;
     }
@@ -497,7 +508,15 @@ function freeCell(
     const x = r.x + rng.int(r.w);
     const z = r.z + rng.int(r.h);
     const ch = tiles[z]![x]!;
-    if (ch !== "." && ch !== "~" && ch !== "=" && ch !== '"' && ch !== "^" && ch !== "'") {
+    if (
+      ch !== "." &&
+      ch !== "~" &&
+      ch !== "=" &&
+      ch !== '"' &&
+      ch !== "^" &&
+      ch !== "'" &&
+      ch !== ":"
+    ) {
       continue;
     }
     const k = `${x},${z}`;
@@ -628,6 +647,16 @@ function stampSpecialSpawns(
         const c = freeCell(tiles, rooms, rng, used, r);
         if (!c) break;
         monsters.push(makeMonsterFromKind(def.id, c.x, c.z));
+      }
+    }
+    if (r.kind === "shrine") {
+      const c = freeCell(tiles, rooms, rng, used, r);
+      if (c) items.push(rollLootTrinket(depth, rng, c.x, c.z, "fine"));
+      const goldN = rng.range(1, 3);
+      for (let i = 0; i < goldN; i++) {
+        const gc = freeCell(tiles, rooms, rng, used, r);
+        if (!gc) break;
+        items.push(makeGold(gc.x, gc.z, rng.range(4, 10)));
       }
     }
   }
