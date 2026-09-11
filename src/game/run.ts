@@ -12,6 +12,10 @@ export type Run = {
   maxHp: number;
   atk: number;
   def: number;
+  weaponRanged: boolean;
+  weaponRange: number;
+  weaponPellets: number;
+  weaponSpread: number;
   weaponId: number | null;
   armorId: number | null;
   pack: Item[];
@@ -36,6 +40,10 @@ export function newRun(seed = Date.now() >>> 0): Run {
     maxHp: 12,
     atk: UNARMED_ATK,
     def: 0,
+    weaponRanged: false,
+    weaponRange: 0,
+    weaponPellets: 0,
+    weaponSpread: 0,
     weaponId: null,
     armorId: null,
     pack: [],

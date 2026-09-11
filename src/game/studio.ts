@@ -420,6 +420,24 @@ export function mountStudio(root: HTMLElement): void {
       field("min depth", numInput(w.minDepth, 1, 99, (v) => (w.minDepth = v))),
       field("price", numInput(w.price ?? w.atk * 8, 0, 999, (v) => (w.price = v))),
     );
+    wrap.append(
+      check("ranged", !!w.ranged, (v) => {
+        w.ranged = v;
+        if (v) {
+          w.range ??= 5;
+          w.pellets ??= 6;
+          w.spreadDeg ??= 20;
+        }
+        render();
+      }),
+    );
+    if (w.ranged) {
+      wrap.append(
+        field("range", numInput(w.range ?? 5, 1, 12, (v) => (w.range = v))),
+        field("pellets", numInput(w.pellets ?? 6, 1, 16, (v) => (w.pellets = v))),
+        field("spread (deg)", numInput(w.spreadDeg ?? 20, 0, 90, (v) => (w.spreadDeg = v))),
+      );
+    }
     return wrap;
   };
 

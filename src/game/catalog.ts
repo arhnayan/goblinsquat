@@ -44,6 +44,10 @@ export type Item = {
   x: number;
   z: number;
   weaponAtk?: number;
+  weaponRanged?: boolean;
+  weaponRange?: number;
+  weaponPellets?: number;
+  weaponSpread?: number;
   armorDef?: number;
   gold?: number;
   price?: number;
@@ -122,6 +126,10 @@ export type WeaponDef = {
   atk: number;
   minDepth: number;
   price?: number;
+  ranged?: boolean;
+  range?: number;
+  pellets?: number;
+  spreadDeg?: number;
 };
 
 export type ArmorDef = {
@@ -322,6 +330,10 @@ export function blankWeapon(taken: Set<string>): WeaponDef {
     atk: 4,
     minDepth: 1,
     price: 20,
+    ranged: false,
+    range: 5,
+    pellets: 6,
+    spreadDeg: 20,
   };
 }
 
@@ -383,12 +395,17 @@ function parseWeapon(raw: unknown): WeaponDef | null {
   const o = raw as Record<string, unknown>;
   const name = str(o.name, "");
   if (!name) return null;
+  const ranged = !!o.ranged;
   return {
     id: str(o.id, slugId(name, new Set())),
     name,
     atk: clampInt(o.atk, 0, 99, 3),
     minDepth: clampInt(o.minDepth, 1, 99, 1),
     price: clampInt(o.price, 0, 999, (typeof o.atk === "number" ? o.atk : 3) * 8),
+    ranged,
+    range: ranged ? clampInt(o.range, 1, 12, 5) : undefined,
+    pellets: ranged ? clampInt(o.pellets, 1, 16, 6) : undefined,
+    spreadDeg: ranged ? clampInt(o.spreadDeg, 0, 90, 20) : undefined,
   };
 }
 
@@ -531,6 +548,10 @@ export function makeWeapon(x: number, z: number, w: WeaponDef): Item {
     x,
     z,
     weaponAtk: w.atk,
+    weaponRanged: w.ranged,
+    weaponRange: w.range,
+    weaponPellets: w.pellets,
+    weaponSpread: w.spreadDeg,
     price: w.price ?? w.atk * 8,
   };
 }

@@ -32,6 +32,68 @@ export function markSeen(
   }
 }
 
+export type RayCast = {
+  /** grid cells crossed after the origin, in travel order, deduped */
+  cells: { x: number; z: number }[];
+  /** fractional grid-space point the ray stopped at (for a smooth visual endpoint) */
+  endX: number;
+  endZ: number;
+  /** true if a wall stopped the ray short of maxDist */
+  blocked: boolean;
+};
+
+/**
+ * Walks a ray from (x0,z0) at `angle` radians for up to `maxDist` grid units,
+ * in small fractional steps (unlike hasLos, which only supports point-to-point
+ * 8-way-agnostic checks). Stops at the first opaque cell. Each integer (x,z)
+ * is treated as the center of a unit cell, matching how actors/worldPos treat
+ * grid coordinates elsewhere.
+ */
+export function raycastCells(
+  dungeon: Dungeon,
+  x0: number,
+  z0: number,
+  angle: number,
+  maxDist: number,
+  step = 0.12,
+): RayCast {
+  const dx = Math.cos(angle) * step;
+  const dz = Math.sin(angle) * step;
+  const cells: { x: number; z: number }[] = [];
+  const seen = new Set<string>();
+  let x = x0;
+  let z = z0;
+  let endX = x0;
+  let endZ = z0;
+  let blocked = false;
+  const steps = Math.max(1, Math.round(maxDist / step));
+  for (let i = 1; i <= steps; i++) {
+    x += dx;
+    z += dz;
+    const cx = Math.round(x);
+    const cz = Math.round(z);
+    if (cx === x0 && cz === z0) {
+      endX = x;
+      endZ = z;
+      continue;
+    }
+    if (isOpaque(dungeon, cx, cz)) {
+      blocked = true;
+      endX = x - dx;
+      endZ = z - dz;
+      break;
+    }
+    endX = x;
+    endZ = z;
+    const key = cellKey(cx, cz);
+    if (!seen.has(key)) {
+      seen.add(key);
+      cells.push({ x: cx, z: cz });
+    }
+  }
+  return { cells, endX, endZ, blocked };
+}
+
 export function hasLos(
   dungeon: Dungeon,
   x0: number,

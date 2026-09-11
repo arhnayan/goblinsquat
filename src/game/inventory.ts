@@ -13,6 +13,10 @@ import { clearStatuses, hasAnyStatus } from "./status";
 export function syncStats(run: Run): void {
   const w = run.pack.find((i) => i.id === run.weaponId);
   run.atk = w?.weaponAtk ?? UNARMED_ATK;
+  run.weaponRanged = w?.weaponRanged ?? false;
+  run.weaponRange = w?.weaponRange ?? 0;
+  run.weaponPellets = w?.weaponPellets ?? 0;
+  run.weaponSpread = w?.weaponSpread ?? 0;
   const a = run.pack.find((i) => i.id === run.armorId);
   run.def = a?.armorDef ?? 0;
 }

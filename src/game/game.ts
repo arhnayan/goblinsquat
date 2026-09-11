@@ -25,7 +25,7 @@ import {
   updateActorView,
   type ActorView,
 } from "./actors";
-import { computeFov, hasLos, markSeen } from "./fov";
+import { computeFov, hasLos, markSeen, raycastCells } from "./fov";
 import { killDrop, rollDamage, rollStrike } from "./combat";
 import { type Floor, type Item, type Monster } from "./generate";
 import {
@@ -34,6 +34,15 @@ import {
   monsterDef,
   woundedName,
 } from "./catalog";
+import { getColors } from "./theme";
+import {
+  disposeProjectileBurst,
+  spawnShotgunBlast,
+  updateProjectileBurst,
+  type PelletHit,
+  type PelletResult,
+  type ShotgunBlast,
+} from "./projectile";
 import {
   addToPack,
   countKind,
@@ -87,6 +96,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   let monsterViews = new Map<number, ActorView>();
   let itemViews = new Map<number, ActorView>();
   let occ = new Map<string, Occ>();
+  let projectileBursts: ShotgunBlast[] = [];
   let phase: Phase = "idle";
   let mode: Mode = "title";
   let helpFrom: Mode = "title";
@@ -165,6 +175,8 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     for (const v of itemViews.values()) disposeActorView(v, scene);
     monsterViews.clear();
     itemViews.clear();
+    for (const b of projectileBursts) disposeProjectileBurst(b, scene);
+    projectileBursts = [];
   }
 
   function loadFloor(depth: number, via: "start" | "down" | "up"): void {
@@ -436,6 +448,79 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
       killMonster(m, explode, player.lunge?.dx ?? 0, player.lunge?.dz ?? 0);
     }
     hud.refresh(run);
+  }
+
+  function fireShotgun(dx: number, dz: number): void {
+    const pellets = Math.max(1, run.weaponPellets || 1);
+    const range = Math.max(1, run.weaponRange || 1);
+    const spreadRad = ((run.weaponSpread || 0) * Math.PI) / 180;
+    const baseAngle = Math.atan2(dz, dx);
+    const affixes = equippedAffixes(run, "weapon");
+    const critBonus = affixes.includes("keen") ? 0.08 : 0;
+
+    const results: PelletResult[] = [];
+    const hitTally = new Map<number, { dmg: number; crit: boolean }>();
+
+    for (let i = 0; i < pellets; i++) {
+      const fan = pellets > 1 ? (i / (pellets - 1) - 0.5) : 0;
+      const jitter = (run.rng.next() - 0.5) * 0.12;
+      const angle = baseAngle + (fan + jitter) * spreadRad;
+      const ray = raycastCells(floor.dungeon, player.gridX, player.gridZ, angle, range);
+      let hit: PelletHit = ray.blocked ? "wall" : "none";
+      let toX = ray.endX;
+      let toZ = ray.endZ;
+      for (const cell of ray.cells) {
+        const foe = monsterAt(cell.x, cell.z);
+        if (foe) {
+          hit = "monster";
+          toX = cell.x;
+          toZ = cell.z;
+          const strike = rollStrike(run.rng, run.atk, foe.def, critBonus);
+          const prev = hitTally.get(foe.id) ?? { dmg: 0, crit: false };
+          hitTally.set(foe.id, { dmg: prev.dmg + strike.dmg, crit: prev.crit || strike.crit });
+          break;
+        }
+      }
+      results.push({ toGridX: toX, toGridZ: toZ, hit });
+    }
+
+    if (hitTally.size === 0) {
+      hud.log("the shot goes wide");
+    } else {
+      for (const [id, { dmg, crit }] of hitTally) {
+        const m = floor.monsters.find((mm) => mm.id === id);
+        if (!m || m.hp <= 0) continue;
+        const full = m.hp >= m.maxHp;
+        m.hp -= dmg;
+        m.awake = true;
+        hud.log(
+          crit
+            ? `you blast the ${woundedName(m)} (${dmg})`
+            : `you hit the ${woundedName(m)} with the blast (${dmg})`,
+        );
+        if (affixes.includes("vampiric")) {
+          const drain = Math.max(1, Math.round(dmg * 0.2));
+          if (run.hp < run.maxHp) {
+            run.hp = Math.min(run.maxHp, run.hp + drain);
+            hud.log(`you drain ${drain} hp`);
+          }
+        }
+        if (m.hp <= 0) {
+          killMonster(m, full || crit, dx, dz);
+        }
+      }
+      hud.refresh(run);
+    }
+
+    const burst = spawnShotgunBlast(
+      scene,
+      player.gridX,
+      player.gridZ,
+      results,
+      getColors().weapon,
+      reduced,
+    );
+    projectileBursts.push(burst);
   }
 
   function hitPlayer(m: Monster): void {
@@ -955,16 +1040,26 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     const foe = monsterAt(nx, nz);
     if (intent.type === "thrust") {
       if (!spendTurn()) return;
-      pendingHit = foe;
+      if (run.weaponRanged) {
+        pendingHit = null;
+        fireShotgun(intent.dx, intent.dz);
+      } else {
+        pendingHit = foe;
+        if (!foe) hud.log("you thrust at air");
+      }
       player.startLunge(intent.dx, intent.dz);
       phase = "playerAnim";
       player.setEnabled(false);
-      if (!foe) hud.log("you thrust at air");
       return;
     }
     if (foe) {
       if (!spendTurn()) return;
-      pendingHit = foe;
+      if (run.weaponRanged) {
+        pendingHit = null;
+        fireShotgun(intent.dx, intent.dz);
+      } else {
+        pendingHit = foe;
+      }
       player.startLunge(intent.dx, intent.dz);
       phase = "playerAnim";
       player.setEnabled(false);
@@ -1311,6 +1406,15 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
 
     for (const v of itemViews.values()) {
       updateActorView(v, dt, time, reduced);
+    }
+
+    if (projectileBursts.length) {
+      for (const b of [...projectileBursts]) {
+        if (updateProjectileBurst(b, dt, scene)) {
+          disposeProjectileBurst(b, scene);
+          projectileBursts = projectileBursts.filter((x) => x !== b);
+        }
+      }
     }
 
     if (phase === "enemies" && run.status === "play" && !enemiesBusy()) {

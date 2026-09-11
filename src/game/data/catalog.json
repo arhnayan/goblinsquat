@@ -10,7 +10,8 @@
     { "id": "goblin-cleaver", "name": "goblin cleaver", "atk": 5, "minDepth": 3, "price": 36 },
     { "id": "rust-chain", "name": "rust chain", "atk": 5, "minDepth": 4, "price": 42 },
     { "id": "squat-maul", "name": "squat maul", "atk": 6, "minDepth": 6, "price": 52 },
-    { "id": "wardens-pike", "name": "warden's pike", "atk": 7, "minDepth": 7, "price": 60 }
+    { "id": "wardens-pike", "name": "warden's pike", "atk": 7, "minDepth": 7, "price": 60 },
+    { "id": "sawn-off", "name": "sawn-off shotgun", "atk": 2, "minDepth": 3, "price": 70, "ranged": true, "range": 5, "pellets": 6, "spreadDeg": 20 }
   ],
   "armors": [
     { "id": "quilted-coat", "name": "quilted coat", "def": 1, "minDepth": 1, "price": 18 },
