@@ -37,6 +37,7 @@ import {
 import {
   addToPack,
   countKind,
+  equippedAffixes,
   firstOfKind,
   packFull,
   pickupMessage,
@@ -149,6 +150,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     for (const m of floor.monsters) {
       if (m.hp <= 0) continue;
       const v = createActorView(font, m.glyph, m.id, m.x, m.z, scene);
+      retintActor(v, m.elite);
       monsterViews.set(m.id, v);
     }
     for (const it of floor.items) {
@@ -406,13 +408,15 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     const v = monsterViews.get(m.id);
     if (v) startActorDeath(v, scene, explode, dx, dz, reduced);
     if (explode) world.punchFloor(m.x, m.z);
-    const drop = killDrop(run.rng, m);
+    const drop = killDrop(run.rng, m, floor.depth, monsterDef(m.kind));
     if (drop) placeItem(drop, m.x, m.z);
   }
 
   function hitMonster(m: Monster): void {
     const full = m.hp >= m.maxHp;
-    const strike = rollStrike(run.rng, run.atk, m.def);
+    const affixes = equippedAffixes(run, "weapon");
+    const critBonus = affixes.includes("keen") ? 0.08 : 0;
+    const strike = rollStrike(run.rng, run.atk, m.def, critBonus);
     m.hp -= strike.dmg;
     m.awake = true;
     hud.log(
@@ -420,6 +424,13 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
         ? `you crit the ${woundedName(m)} (${strike.dmg})`
         : `you hit the ${woundedName(m)} (${strike.dmg})`,
     );
+    if (affixes.includes("vampiric")) {
+      const drain = Math.max(1, Math.round(strike.dmg * 0.2));
+      if (run.hp < run.maxHp) {
+        run.hp = Math.min(run.maxHp, run.hp + drain);
+        hud.log(`you drain ${drain} hp`);
+      }
+    }
     if (m.hp <= 0) {
       const explode = full || strike.crit;
       killMonster(m, explode, player.lunge?.dx ?? 0, player.lunge?.dz ?? 0);
@@ -430,20 +441,34 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   function hitPlayer(m: Monster): void {
     if (run.status !== "play") return;
     const def = monsterDef(m.kind);
+    const armorAffixes = equippedAffixes(run, "armor");
     const dmg = rollDamage(run.rng, m.atk, run.def);
     run.hp -= dmg;
     hud.log(`the ${m.name} hits you (${dmg})`);
-    if (def.poison) {
+    if (armorAffixes.includes("thorned") && m.hp > 0) {
+      const reflect = run.rng.int(2) + 1;
+      m.hp -= reflect;
+      hud.log("your armor bites back");
+      if (m.hp <= 0) killMonster(m, false);
+    }
+    const warded = armorAffixes.includes("wardStatus");
+    if (def.poison && !(warded && run.rng.chance(0.25))) {
       const msg = applyStatus(run, "poison");
       if (msg) hud.log(msg);
+    } else if (def.poison) {
+      hud.log("your ward resists it");
     }
-    if (def.bleed) {
+    if (def.bleed && !(warded && run.rng.chance(0.25))) {
       const msg = applyStatus(run, "bleed");
       if (msg) hud.log(msg);
+    } else if (def.bleed) {
+      hud.log("your ward resists it");
     }
-    if (def.burns) {
+    if (def.burns && !(warded && run.rng.chance(0.25))) {
       const msg = applyStatus(run, "burn");
       if (msg) hud.log(msg);
+    } else if (def.burns) {
+      hud.log("your ward resists it");
     }
     hud.refresh(run);
     if (run.hp <= 0) die();
@@ -785,6 +810,20 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
     world.showFloorAt(nx, nz);
   }
 
+  const PACK_ALERT_RADIUS = 6;
+
+  function alertPack(source: Monster): void {
+    let alerted = 0;
+    for (const other of floor.monsters) {
+      if (other.id === source.id || other.hp <= 0 || other.awake) continue;
+      if (other.kind !== source.kind) continue;
+      if (chebyshev(other.x, other.z, source.x, source.z) > PACK_ALERT_RADIUS) continue;
+      other.awake = true;
+      alerted += 1;
+    }
+    if (alerted > 0) hud.log(`the ${source.name}s call to each other`);
+  }
+
   function beginEnemyTurn(): void {
     if (run.status !== "play") {
       phase = "over";
@@ -814,6 +853,7 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
         if (sees) {
           m.awake = true;
           hud.log(`the ${m.name} notices you`);
+          if (def.packAlert || m.elite) alertPack(m);
         } else continue;
       }
 
@@ -1286,7 +1326,10 @@ export function createGame(scene: Scene, font: Font, hud: Hud): Game {
   const retint = () => {
     world.retint();
     player.retint();
-    for (const v of monsterViews.values()) retintActor(v);
+    for (const m of floor.monsters) {
+      const v = monsterViews.get(m.id);
+      if (v) retintActor(v, m.elite);
+    }
     for (const v of itemViews.values()) retintActor(v);
     if (lookView) retintActor(lookView);
     hud.refresh(run);

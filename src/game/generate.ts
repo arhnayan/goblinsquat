@@ -11,20 +11,16 @@ import type { Rng } from "./rng";
 import {
   guardianDef,
   makeAmulet,
-  makeArmor,
   makeFood,
   makeGold,
   makeMonsterFromKind,
-  makePotion,
-  makeWeapon,
-  pickArmor,
   pickMonsterDef,
   pickMonsterDefForNest,
-  pickWeapon,
   type Item,
   type Monster,
   type MonsterKind,
 } from "./catalog";
+import { eliteChance, rollLootArmor, rollLootWeapon, rollPotion } from "./loot";
 import { generateShopOffers, type ShopState } from "./shop";
 
 export type { Item, Monster, MonsterKind };
@@ -525,7 +521,7 @@ function scatterItems(
   for (let i = 0; i < potions; i++) {
     const c = freeCell(tiles, rooms, rng, used);
     if (!c) break;
-    items.push(makePotion(c.x, c.z));
+    items.push(rollPotion(depth, rng, c.x, c.z));
   }
   const foodN = rng.range(1, 2);
   for (let i = 0; i < foodN; i++) {
@@ -535,11 +531,11 @@ function scatterItems(
   }
   if (rng.chance(0.35 + depth * 0.05)) {
     const c = freeCell(tiles, rooms, rng, used);
-    if (c) items.push(makeWeapon(c.x, c.z, pickWeapon(depth, rng)));
+    if (c) items.push(rollLootWeapon(depth, rng, c.x, c.z));
   }
   if (rng.chance(0.22 + depth * 0.04)) {
     const c = freeCell(tiles, rooms, rng, used);
-    if (c) items.push(makeArmor(c.x, c.z, pickArmor(depth, rng)));
+    if (c) items.push(rollLootArmor(depth, rng, c.x, c.z));
   }
   const goldN = rng.range(2, 5);
   for (let i = 0; i < goldN; i++) {
@@ -602,8 +598,8 @@ function stampSpecialSpawns(
       for (let i = 0; i < 2; i++) {
         const c = freeCell(tiles, rooms, rng, used, r);
         if (!c) break;
-        if (rng.chance(0.5)) items.push(makeWeapon(c.x, c.z, pickWeapon(depth, rng)));
-        else items.push(makeArmor(c.x, c.z, pickArmor(depth, rng)));
+        if (rng.chance(0.5)) items.push(rollLootWeapon(depth, rng, c.x, c.z, "fine"));
+        else items.push(rollLootArmor(depth, rng, c.x, c.z, "fine"));
       }
       const goldN = rng.range(3, 6);
       for (let i = 0; i < goldN; i++) {
@@ -645,5 +641,6 @@ export function makeMonster(
   guardian: boolean,
 ): Monster {
   if (guardian) return makeMonsterFromKind(guardianDef().id, x, z);
-  return makeMonsterFromKind(pickMonsterDef(depth, rng).id, x, z);
+  const elite = rng.chance(eliteChance(depth));
+  return makeMonsterFromKind(pickMonsterDef(depth, rng).id, x, z, elite);
 }

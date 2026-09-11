@@ -7,6 +7,7 @@ import {
 } from "three";
 import type { Font } from "opentype.js";
 import { tileStyle, worldPos } from "./dungeon";
+import { getColors } from "./theme";
 import {
   applyHopPose,
   applyIdlePose,
@@ -214,14 +215,19 @@ export function startActorDeath(
   view.dust = burstGlyphDust(view.mesh, scene, explode, view.glyph, hitDx, hitDz);
 }
 
-export function retintActor(view: ActorView): void {
+const ELITE_SCALE = 1.12;
+const ELITE_EMISSIVE_INTENSITY = 0.55;
+
+export function retintActor(view: ActorView, elite = false): void {
   const style = tileStyle(view.glyph);
   const mat = view.mesh.material;
   if (Array.isArray(mat)) return;
   const m = mat as MeshStandardMaterial;
   m.color.setHex(style.color);
-  m.emissive.setHex(style.emissive || 0x000000);
-  m.emissiveIntensity = style.emissive ? 0.45 : 0;
+  m.emissive.setHex(elite ? getColors().gold : style.emissive || 0x000000);
+  m.emissiveIntensity = elite ? ELITE_EMISSIVE_INTENSITY : style.emissive ? 0.45 : 0;
+  const scale = elite ? ELITE_SCALE : 1;
+  view.mesh.scale.set(style.sizeMul * scale, style.yScale * scale, style.sizeMul * scale);
 }
 
 export function disposeActorView(view: ActorView, scene: Scene): void {

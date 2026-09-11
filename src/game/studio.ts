@@ -4,6 +4,7 @@ import {
   blankWeapon,
   catalogWarnings,
   cloneCatalog,
+  DEFAULT_LOOT_TABLE,
   getCatalog,
   parseCatalog,
   persistCatalog,
@@ -373,6 +374,7 @@ export function mountStudio(root: HTMLElement): void {
       check("steals", m.steals, (v) => (m.steals = v)),
       check("erratic", m.erratic, (v) => (m.erratic = v)),
       check("flees", m.flees, (v) => (m.flees = v)),
+      check("pack alert", m.packAlert, (v) => (m.packAlert = v)),
       check("guardian", m.guardian, (v) => {
         if (v) {
           for (const other of draft.monsters) other.guardian = other.id === m.id;
@@ -381,6 +383,26 @@ export function mountStudio(root: HTMLElement): void {
       }),
     );
     wrap.append(flags);
+
+    const lootToggle = check("custom loot table", !!m.loot, (v) => {
+      m.loot = v ? { ...DEFAULT_LOOT_TABLE } : undefined;
+      render();
+    });
+    wrap.append(lootToggle);
+    if (m.loot) {
+      const loot = m.loot;
+      const pct = (v: number, set: (n: number) => void) =>
+        numInput(Math.round(v * 100), 0, 100, (n) => set(n / 100));
+      wrap.append(
+        field("potion %", pct(loot.potionChance, (n) => (loot.potionChance = n))),
+        field("food %", pct(loot.foodChance, (n) => (loot.foodChance = n))),
+        field("weapon %", pct(loot.weaponChance ?? 0, (n) => (loot.weaponChance = n))),
+        field("armor %", pct(loot.armorChance ?? 0, (n) => (loot.armorChance = n))),
+        field("gold %", pct(loot.goldChance, (n) => (loot.goldChance = n))),
+        field("gold min", numInput(loot.goldMin, 0, 999, (v) => (loot.goldMin = v))),
+        field("gold max", numInput(loot.goldMax, 0, 999, (v) => (loot.goldMax = v))),
+      );
+    }
     return wrap;
   };
 

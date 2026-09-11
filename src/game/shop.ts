@@ -1,12 +1,5 @@
-import {
-  makeArmor,
-  makeFood,
-  makePotion,
-  makeWeapon,
-  pickArmor,
-  pickWeapon,
-  type Item,
-} from "./catalog";
+import { makeFood, type Item } from "./catalog";
+import { rollLootArmor, rollLootWeapon, rollPotion } from "./loot";
 import type { Rng } from "./rng";
 
 export type ShopOffer = {
@@ -63,7 +56,7 @@ function makeOffer(
   kind: "potion" | "food" | "weapon" | "armor",
 ): ShopOffer {
   if (kind === "potion") {
-    const item = makePotion(-1, -1);
+    const item = rollPotion(depth, rng, -1, -1);
     return { item, price: scaledPrice(catalogPrice(item), depth) };
   }
   if (kind === "food") {
@@ -71,10 +64,10 @@ function makeOffer(
     return { item, price: scaledPrice(catalogPrice(item), depth) };
   }
   if (kind === "weapon") {
-    const item = makeWeapon(-1, -1, pickWeapon(depth, rng));
+    const item = rollLootWeapon(depth, rng, -1, -1);
     return { item, price: scaledPrice(catalogPrice(item), depth) };
   }
-  const item = makeArmor(-1, -1, pickArmor(depth, rng));
+  const item = rollLootArmor(depth, rng, -1, -1);
   return { item, price: scaledPrice(catalogPrice(item), depth) };
 }
 

@@ -32,6 +32,10 @@ export const RESERVED_GLYPHS = new Set([
 
 export type ItemKind = "potion" | "weapon" | "gold" | "amulet" | "armor" | "food";
 
+export type ItemRarity = "common" | "fine" | "mastercraft";
+
+export type PotionKind = "heal" | "antidote" | "vigor";
+
 export type Item = {
   id: number;
   kind: ItemKind;
@@ -43,6 +47,9 @@ export type Item = {
   armorDef?: number;
   gold?: number;
   price?: number;
+  rarity?: ItemRarity;
+  affixIds?: string[];
+  potionKind?: PotionKind;
 };
 
 export type MonsterKind = string;
@@ -60,6 +67,25 @@ export type Monster = {
   def: number;
   awake: boolean;
   fleeing: boolean;
+  elite: boolean;
+};
+
+export type LootTable = {
+  potionChance: number;
+  foodChance: number;
+  weaponChance?: number;
+  armorChance?: number;
+  goldChance: number;
+  goldMin: number;
+  goldMax: number;
+};
+
+export const DEFAULT_LOOT_TABLE: LootTable = {
+  potionChance: 0.08,
+  foodChance: 0.1,
+  goldChance: 0.22,
+  goldMin: 2,
+  goldMax: 8,
 };
 
 export type MonsterDef = {
@@ -86,6 +112,8 @@ export type MonsterDef = {
   burns: boolean;
   ranged: boolean;
   range: number;
+  packAlert: boolean;
+  loot?: LootTable;
 };
 
 export type WeaponDef = {
@@ -283,6 +311,7 @@ export function blankMonster(taken: Set<string>): MonsterDef {
     burns: false,
     ranged: false,
     range: 3,
+    packAlert: false,
   };
 }
 
@@ -335,6 +364,7 @@ function emptyCatalog(): CatalogData {
         burns: false,
         ranged: false,
         range: 3,
+        packAlert: false,
       },
     ],
   };
@@ -412,6 +442,22 @@ function parseMonster(raw: unknown): MonsterDef | null {
     burns: bool(o.burns),
     ranged: bool(o.ranged),
     range: clampInt(o.range, 1, 8, 3),
+    packAlert: bool(o.packAlert),
+    loot: parseLoot(o.loot),
+  };
+}
+
+function parseLoot(raw: unknown): LootTable | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  return {
+    potionChance: clampNum(o.potionChance, 0, 1, 0.08),
+    foodChance: clampNum(o.foodChance, 0, 1, 0.1),
+    weaponChance: o.weaponChance == null ? undefined : clampNum(o.weaponChance, 0, 1, 0),
+    armorChance: o.armorChance == null ? undefined : clampNum(o.armorChance, 0, 1, 0),
+    goldChance: clampNum(o.goldChance, 0, 1, 0.22),
+    goldMin: clampInt(o.goldMin, 0, 999, 2),
+    goldMax: clampInt(o.goldMax, 0, 999, 8),
   };
 }
 
@@ -547,21 +593,34 @@ export function pickMonsterDefForNest(
   return pickWeighted(use, rng);
 }
 
-export function makeMonsterFromKind(kind: MonsterKind, x: number, z: number): Monster {
+const ELITE_HP_MUL = 1.4;
+const ELITE_ATK_MUL = 1.3;
+const ELITE_DEF_BONUS = 1;
+
+export function makeMonsterFromKind(
+  kind: MonsterKind,
+  x: number,
+  z: number,
+  elite = false,
+): Monster {
   const d = monsterDef(kind);
+  const hp = elite ? Math.round(d.hp * ELITE_HP_MUL) : d.hp;
+  const atk = elite ? Math.round(d.atk * ELITE_ATK_MUL) : d.atk;
+  const def = elite ? d.def + ELITE_DEF_BONUS : d.def;
   return {
     id: allocId(),
     kind: d.id,
-    name: d.name,
+    name: elite ? `elite ${d.name}` : d.name,
     glyph: d.glyph,
     x,
     z,
-    hp: d.hp,
-    maxHp: d.hp,
-    atk: d.atk,
-    def: d.def,
+    hp,
+    maxHp: hp,
+    atk,
+    def,
     awake: false,
     fleeing: false,
+    elite,
   };
 }
 

@@ -9,13 +9,15 @@
     { "id": "hook-knife", "name": "hook knife", "atk": 4, "minDepth": 2, "price": 28 },
     { "id": "goblin-cleaver", "name": "goblin cleaver", "atk": 5, "minDepth": 3, "price": 36 },
     { "id": "rust-chain", "name": "rust chain", "atk": 5, "minDepth": 4, "price": 42 },
-    { "id": "squat-maul", "name": "squat maul", "atk": 6, "minDepth": 6, "price": 52 }
+    { "id": "squat-maul", "name": "squat maul", "atk": 6, "minDepth": 6, "price": 52 },
+    { "id": "wardens-pike", "name": "warden's pike", "atk": 7, "minDepth": 7, "price": 60 }
   ],
   "armors": [
     { "id": "quilted-coat", "name": "quilted coat", "def": 1, "minDepth": 1, "price": 18 },
     { "id": "leather", "name": "leather", "def": 1, "minDepth": 1, "price": 14 },
     { "id": "mail", "name": "mail", "def": 2, "minDepth": 3, "price": 28 },
-    { "id": "plate", "name": "plate", "def": 3, "minDepth": 6, "price": 44 }
+    { "id": "plate", "name": "plate", "def": 3, "minDepth": 6, "price": 44 },
+    { "id": "sealed-plate", "name": "sealed plate", "def": 4, "minDepth": 7, "price": 58 }
   ],
   "monsters": [
     {
@@ -41,7 +43,8 @@
       "bleed": false,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false
     },
     {
       "id": "bat",
@@ -66,7 +69,8 @@
       "bleed": false,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false
     },
     {
       "id": "goblin",
@@ -90,7 +94,34 @@
       "bleed": false,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false
+    },
+    {
+      "id": "jackal",
+      "name": "jackal",
+      "glyph": "j",
+      "hp": 4,
+      "atk": 2,
+      "def": 0,
+      "minDepth": 1,
+      "maxDepth": 4,
+      "weight": 26,
+      "palette": "rat",
+      "yScale": 0.8,
+      "sizeMul": 1,
+      "glow": false,
+      "canOpenDoors": false,
+      "poison": false,
+      "steals": false,
+      "erratic": false,
+      "flees": false,
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3,
+      "packAlert": true
     },
     {
       "id": "snake",
@@ -115,7 +146,15 @@
       "bleed": false,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false,
+      "loot": {
+        "potionChance": 0.2,
+        "foodChance": 0.05,
+        "goldChance": 0.15,
+        "goldMin": 2,
+        "goldMax": 6
+      }
     },
     {
       "id": "thief",
@@ -139,7 +178,8 @@
       "bleed": true,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false
     },
     {
       "id": "slinger",
@@ -164,7 +204,8 @@
       "bleed": false,
       "burns": false,
       "ranged": true,
-      "range": 4
+      "range": 4,
+      "packAlert": false
     },
     {
       "id": "ogre",
@@ -188,7 +229,52 @@
       "bleed": false,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false,
+      "loot": {
+        "potionChance": 0.06,
+        "foodChance": 0.08,
+        "weaponChance": 0.1,
+        "armorChance": 0.12,
+        "goldChance": 0.25,
+        "goldMin": 4,
+        "goldMax": 12
+      }
+    },
+    {
+      "id": "warden",
+      "name": "warden",
+      "glyph": "W",
+      "hp": 10,
+      "atk": 3,
+      "def": 2,
+      "minDepth": 4,
+      "maxDepth": 7,
+      "weight": 18,
+      "palette": "ogre",
+      "yScale": 1.05,
+      "sizeMul": 1,
+      "glow": false,
+      "canOpenDoors": true,
+      "poison": false,
+      "steals": false,
+      "erratic": false,
+      "flees": false,
+      "guardian": false,
+      "bleed": false,
+      "burns": false,
+      "ranged": false,
+      "range": 3,
+      "packAlert": false,
+      "loot": {
+        "potionChance": 0.05,
+        "foodChance": 0.05,
+        "weaponChance": 0.08,
+        "armorChance": 0.18,
+        "goldChance": 0.2,
+        "goldMin": 4,
+        "goldMax": 10
+      }
     },
     {
       "id": "fire-beetle",
@@ -212,7 +298,41 @@
       "bleed": false,
       "burns": true,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false
+    },
+    {
+      "id": "cinder-wisp",
+      "name": "cinder-wisp",
+      "glyph": "c",
+      "hp": 7,
+      "atk": 3,
+      "def": 0,
+      "minDepth": 5,
+      "maxDepth": 8,
+      "weight": 16,
+      "palette": "beetle",
+      "yScale": 0.6,
+      "sizeMul": 0.85,
+      "glow": true,
+      "canOpenDoors": false,
+      "poison": false,
+      "steals": false,
+      "erratic": true,
+      "flees": false,
+      "guardian": false,
+      "bleed": false,
+      "burns": true,
+      "ranged": true,
+      "range": 4,
+      "packAlert": false,
+      "loot": {
+        "potionChance": 0.2,
+        "foodChance": 0.05,
+        "goldChance": 0.15,
+        "goldMin": 2,
+        "goldMax": 6
+      }
     },
     {
       "id": "squat-demon",
@@ -236,7 +356,8 @@
       "bleed": false,
       "burns": false,
       "ranged": false,
-      "range": 3
+      "range": 3,
+      "packAlert": false
     }
   ]
 }

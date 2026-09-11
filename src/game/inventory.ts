@@ -17,6 +17,12 @@ export function syncStats(run: Run): void {
   run.def = a?.armorDef ?? 0;
 }
 
+export function equippedAffixes(run: Run, slot: "weapon" | "armor"): string[] {
+  const id = slot === "weapon" ? run.weaponId : run.armorId;
+  const item = run.pack.find((i) => i.id === id);
+  return item?.affixIds ?? [];
+}
+
 export function packFull(run: Run): boolean {
   return run.pack.length >= PACK_SIZE;
 }
@@ -46,6 +52,18 @@ export function usePackItem(run: Run, index: number): string {
   if (!it) return "nothing there";
   if (it.kind === "potion") {
     run.pack.splice(index, 1);
+    const kind = it.potionKind ?? "heal";
+    if (kind === "antidote") {
+      const afflicted = hasAnyStatus(run);
+      clearStatuses(run);
+      run.hp = Math.min(run.maxHp, run.hp + Math.ceil(potionHeal() / 2));
+      return afflicted ? "the antidote purges the sickness" : "the antidote does little";
+    }
+    if (kind === "vigor") {
+      run.maxHp += 2;
+      run.hp = Math.min(run.maxHp, run.hp + 2);
+      return "you feel sturdier";
+    }
     const afflicted = hasAnyStatus(run);
     clearStatuses(run);
     if (run.hp >= run.maxHp && !afflicted) return "the potion does nothing";
