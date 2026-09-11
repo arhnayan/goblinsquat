@@ -2,7 +2,8 @@ import type { Run } from "./run";
 import type { HudMotion } from "./camera";
 import { getTheme } from "./theme";
 import { countKind, itemTag } from "./inventory";
-import { packLetter, type Item, type ItemKind } from "./catalog";
+import { packLetter, UNARMED_ATK, type Item } from "./catalog";
+import { affixDisplay, buildEmptySlotCard, buildItemCard } from "./itemCard";
 import { describeStatuses, hasStatus } from "./status";
 import { canSell, sellPrice, type ShopState } from "./shop";
 
@@ -22,7 +23,9 @@ export type Hud = {
   overlay: (text: string | null) => void;
   showTitle: (seedBuf: string) => void;
   showHelp: () => void;
-  showPack: (run: Run) => void;
+  showInventory: (run: Run) => void;
+  hideInventory: () => void;
+  moveInventorySelection: (run: Run, dx: number, dz: number) => void;
   hidePack: () => void;
   showShop: (run: Run, shop: ShopState) => void;
   setLook: (text: string | null) => void;
@@ -79,12 +82,14 @@ export function createHud(): Hud {
   const overlayBox = el("overlay");
   const packBox = el("pack");
   const lookBox = el("look");
+  const inventoryBox = el("inventory");
   const lines: string[] = [];
   let lookText: string | null = null;
   let hooks: HudHooks | null = null;
   let prevHp: number | null = null;
   let prevGold: number | null = null;
   let prevDepth: number | null = null;
+  let invSelected: number | null = null;
 
   status.classList.add("panel", "hud-float");
   logBox.classList.add("panel", "hud-float");
@@ -92,6 +97,12 @@ export function createHud(): Hud {
   lookBox.classList.add("panel", "hud-float");
   packBox.classList.add("panel", "hud-float");
   overlayBox.classList.add("panel", "hud-float");
+
+  const invScrim = document.createElement("div");
+  invScrim.className = "inv-scrim";
+  const invShell = document.createElement("div");
+  invShell.className = "inv-shell panel hud-float";
+  inventoryBox.append(invScrim, invShell);
 
   const floatPanels: FloatPanel[] = [
     { node: status, phase: 0, parallax: 0.42, tilt: 0.35, bob: 2.6 },
@@ -131,24 +142,6 @@ export function createHud(): Hud {
     return node;
   };
 
-  const kindColorVar = (kind: ItemKind): string => {
-    switch (kind) {
-      case "potion":
-        return "var(--c-potion)";
-      case "weapon":
-        return "var(--c-weapon)";
-      case "armor":
-        return "var(--c-armor)";
-      case "food":
-        return "var(--c-food)";
-      case "amulet":
-        return "var(--c-amulet)";
-      case "gold":
-      default:
-        return "var(--gold)";
-    }
-  };
-
   const enterPanel = (node: HTMLElement) => {
     node.classList.remove("is-entering");
     void node.offsetWidth;
@@ -159,24 +152,161 @@ export function createHud(): Hud {
   const packRow = (letter: string, item: Item, name: string, price?: string): HTMLLIElement => {
     const row = document.createElement("li");
     row.className = "pack-row";
-    const key = document.createElement("kbd");
-    key.className = "pack-key";
-    key.textContent = letter;
-    const glyph = document.createElement("i");
-    glyph.className = "pack-glyph";
-    glyph.style.color = kindColorVar(item.kind);
-    glyph.textContent = item.glyph;
-    const nameEl = document.createElement("span");
-    nameEl.className = "pack-name";
-    nameEl.textContent = name;
-    row.append(key, glyph, nameEl);
-    if (price) {
-      const priceEl = document.createElement("span");
-      priceEl.className = "pack-price";
-      priceEl.textContent = price;
-      row.append(priceEl);
-    }
+    row.append(buildItemCard(item, { size: "mini", letter, name, price }));
     return row;
+  };
+
+  const equipSlot = (kind: "weapon" | "armor", run: Run): HTMLElement => {
+    const wrap = document.createElement("div");
+    const label = document.createElement("div");
+    label.className = "inv-slot-label";
+    label.textContent = kind;
+    wrap.append(label);
+
+    const id = kind === "weapon" ? run.weaponId : run.armorId;
+    const item = run.pack.find((i) => i.id === id) ?? null;
+    wrap.append(item ? buildItemCard(item, { size: "slot", equipped: true }) : buildEmptySlotCard(kind));
+
+    const stats = document.createElement("div");
+    stats.className = "inv-slot-stats";
+    stats.textContent =
+      kind === "weapon" ? `ATK ${run.atk}${item ? "" : " (unarmed)"}` : `DEF ${run.def}`;
+    wrap.append(stats);
+
+    if (item) {
+      const affixes = affixDisplay(item);
+      if (affixes.length) {
+        const list = document.createElement("ul");
+        list.className = "inv-affix-list";
+        for (const a of affixes) {
+          const li = document.createElement("li");
+          li.textContent = a.detail ? `${a.label} — ${a.detail}` : a.label;
+          list.append(li);
+        }
+        wrap.append(list);
+      }
+    }
+    return wrap;
+  };
+
+  const invDetail = (run: Run): HTMLElement => {
+    const wrap = document.createElement("div");
+    const it = invSelected !== null ? (run.pack[invSelected] ?? null) : null;
+    if (!it) {
+      wrap.textContent = "select an item to inspect";
+      return wrap;
+    }
+    const equipped = it.id === run.weaponId || it.id === run.armorId;
+    if (equipped) {
+      wrap.textContent = `${it.name} — equipped`;
+      return wrap;
+    }
+    if (it.kind === "weapon" || it.kind === "armor") {
+      const cur = run.pack.find((p) => (it.kind === "weapon" ? p.id === run.weaponId : p.id === run.armorId));
+      const curVal = it.kind === "weapon" ? (cur?.weaponAtk ?? UNARMED_ATK) : (cur?.armorDef ?? 0);
+      const val = it.kind === "weapon" ? (it.weaponAtk ?? 0) : (it.armorDef ?? 0);
+      const delta = val - curVal;
+      const label = it.kind === "weapon" ? "ATK" : "DEF";
+      wrap.append(document.createTextNode(`${it.name} — `));
+      const d = document.createElement("span");
+      d.className = delta >= 0 ? "is-up" : "is-down";
+      d.textContent = `${delta >= 0 ? "+" : ""}${delta} ${label} vs equipped`;
+      wrap.append(d);
+      return wrap;
+    }
+    wrap.textContent = it.name;
+    return wrap;
+  };
+
+  const renderInventory = (run: Run) => {
+    const head = document.createElement("div");
+    head.className = "inv-head";
+    const title = document.createElement("span");
+    title.textContent = "inventory";
+    const gold = document.createElement("span");
+    gold.className = "inv-gold";
+    gold.textContent = `$${run.gold}`;
+    head.append(title, gold);
+
+    const equip = document.createElement("div");
+    equip.className = "inv-equip";
+    equip.append(equipSlot("weapon", run), equipSlot("armor", run));
+    if (run.hasAmulet) {
+      const note = document.createElement("div");
+      note.className = "inv-amulet-note";
+      note.textContent = "the amulet hums — secured";
+      equip.append(note);
+    }
+
+    const gridWrap = document.createElement("div");
+    gridWrap.className = "inv-grid-wrap";
+    const grid = document.createElement("div");
+    grid.className = "inv-grid";
+    if (run.pack.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "pack-empty";
+      empty.textContent = "your pack is empty";
+      grid.append(empty);
+    } else {
+      run.pack.forEach((it, i) => {
+        const equipped = it.id === run.weaponId || it.id === run.armorId;
+        grid.append(
+          buildItemCard(it, {
+            letter: packLetter(i),
+            size: "grid",
+            equipped,
+            selected: i === invSelected,
+            onClick: (e) => {
+              invSelected = i;
+              if (e.shiftKey) hooks?.onPackDrop(i);
+              else hooks?.onPackUse(i);
+            },
+          }),
+        );
+      });
+    }
+    gridWrap.append(grid);
+
+    const detail = document.createElement("div");
+    detail.className = "inv-detail";
+    detail.append(invDetail(run));
+    gridWrap.append(detail);
+
+    const foot = document.createElement("p");
+    foot.className = "inv-foot";
+    foot.textContent = "letter use  shift+letter drop  arrows select  i/esc close";
+
+    invShell.replaceChildren(head, equip, gridWrap, foot);
+  };
+
+  const showInventory = (run: Run) => {
+    const wasHidden = inventoryBox.hidden;
+    inventoryBox.hidden = false;
+    if (invSelected === null || invSelected >= run.pack.length) {
+      invSelected = run.pack.length ? 0 : null;
+    }
+    renderInventory(run);
+    hint.textContent = "letter use  shift+letter drop  i close";
+    if (wasHidden) enterPanel(invShell);
+  };
+
+  const hideInventory = () => {
+    inventoryBox.hidden = true;
+    invShell.replaceChildren();
+    invSelected = null;
+  };
+
+  const moveInventorySelection = (run: Run, dx: number, dz: number) => {
+    if (!run.pack.length) return;
+    const cols = 4;
+    let idx = invSelected ?? 0;
+    if (dx) idx = Math.max(0, Math.min(run.pack.length - 1, idx + dx));
+    else if (dz) {
+      const next = idx + dz * cols;
+      if (next >= 0 && next < run.pack.length) idx = next;
+    }
+    invSelected = idx;
+    renderInventory(run);
   };
 
 
@@ -322,40 +452,6 @@ export function createHud(): Hud {
     hint.textContent = "esc close";
   };
 
-  const showPack = (run: Run) => {
-    const wasHidden = packBox.hidden;
-    packBox.hidden = false;
-    packBox.replaceChildren();
-    const head = document.createElement("div");
-    head.className = "pack-head";
-    head.textContent = "pack";
-    packBox.append(head);
-    if (run.pack.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "pack-empty";
-      empty.textContent = "your pack is empty";
-      packBox.append(empty);
-    } else {
-      const list = document.createElement("ul");
-      list.className = "pack-list";
-      run.pack.forEach((it, i) => {
-        const row = packRow(packLetter(i), it, `${it.name}${itemTag(run, it)}`);
-        row.addEventListener("click", (e) => {
-          if (e.shiftKey) hooks?.onPackDrop(i);
-          else hooks?.onPackUse(i);
-        });
-        list.append(row);
-      });
-      packBox.append(list);
-    }
-    const foot = document.createElement("p");
-    foot.className = "pack-foot";
-    foot.textContent = "letter use  shift+letter drop  i close";
-    packBox.append(foot);
-    hint.textContent = "letter use  shift+letter drop  i close";
-    if (wasHidden) enterPanel(packBox);
-  };
-
   const hidePack = () => {
     packBox.hidden = true;
     packBox.replaceChildren();
@@ -468,7 +564,9 @@ export function createHud(): Hud {
     overlay,
     showTitle,
     showHelp,
-    showPack,
+    showInventory,
+    hideInventory,
+    moveInventorySelection,
     hidePack,
     showShop,
     setLook,

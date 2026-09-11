@@ -323,6 +323,346 @@ canvas {
   opacity: 0.75;
 }
 
+/* --- item cards --- */
+
+.item-card {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--edge, #b45a38) 65%, transparent);
+  background: color-mix(in srgb, var(--panel, #16120c) 85%, transparent);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.item-card.size-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 88px;
+  padding: 10px 6px 8px;
+  text-align: center;
+}
+
+.item-card.size-grid .item-card-glyph {
+  font-size: 26px;
+}
+
+.item-card.size-grid .item-card-name {
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.item-card.size-slot {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.item-card.size-slot .item-card-glyph {
+  font-size: 30px;
+  width: 1.4em;
+  flex: none;
+  text-align: center;
+}
+
+.item-card.size-slot .item-card-name {
+  font-size: 17px;
+  flex: 1;
+}
+
+.item-card.size-mini {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 2px 0;
+}
+
+.item-card.size-mini .item-card-glyph {
+  width: 1.4ch;
+  text-align: center;
+}
+
+.item-card.size-mini .item-card-name {
+  flex: 1;
+}
+
+.item-card-key {
+  color: var(--accent, #ffcc55);
+  font-family: inherit;
+}
+
+.item-card-glyph {
+  text-shadow: 0 0 5px currentColor;
+  line-height: 1;
+}
+
+.item-card-price {
+  margin-left: auto;
+  color: var(--gold, #f0c878);
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+
+.item-card-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  color: var(--accent, #ffcc55);
+  text-shadow: 0 0 6px currentColor;
+  font-style: normal;
+  font-size: 13px;
+}
+
+.item-card.size-slot .item-card-badge {
+  position: static;
+  margin-left: auto;
+}
+
+.item-card:hover,
+.item-card:focus-visible {
+  outline: 2px solid var(--accent, #ffcc55);
+}
+
+.item-card.is-selected {
+  outline: 2px solid var(--accent, #ffcc55);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--void, #16120c) 90%, black);
+}
+
+.item-card.is-equipped {
+  border-color: var(--accent, #ffcc55);
+}
+
+.item-card.is-empty {
+  border-style: dashed;
+  opacity: 0.55;
+  cursor: default;
+}
+
+.item-card.is-empty:hover {
+  outline: none;
+}
+
+/* rarity tiers */
+
+.item-card.rarity-fine {
+  border-color: color-mix(in srgb, var(--accent, #ffcc55) 65%, var(--edge, #b45a38));
+  box-shadow: 0 0 10px -3px color-mix(in srgb, var(--accent, #ffcc55) 55%, transparent);
+}
+
+.item-card.rarity-fine .item-card-glyph {
+  filter: brightness(1.1);
+}
+
+.item-card.rarity-mastercraft {
+  border-color: var(--gold, #f0c878);
+  box-shadow:
+    0 0 14px -2px color-mix(in srgb, var(--gold, #f0c878) 65%, transparent),
+    inset 0 0 10px -4px color-mix(in srgb, var(--gold, #f0c878) 55%, transparent);
+}
+
+.item-card.rarity-mastercraft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.8;
+  background:
+    radial-gradient(circle 2px at 5px 5px, var(--gold, #f0c878), transparent 70%),
+    radial-gradient(circle 2px at calc(100% - 5px) 5px, var(--gold, #f0c878), transparent 70%),
+    radial-gradient(circle 2px at 5px calc(100% - 5px), var(--gold, #f0c878), transparent 70%),
+    radial-gradient(
+      circle 2px at calc(100% - 5px) calc(100% - 5px),
+      var(--gold, #f0c878),
+      transparent 70%
+    );
+}
+
+.item-card.rarity-mastercraft .item-card-glyph {
+  font-size: 115%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .item-card.rarity-mastercraft {
+    animation: card-glow-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes card-glow-pulse {
+  50% {
+    box-shadow:
+      0 0 20px -2px color-mix(in srgb, var(--gold, #f0c878) 80%, transparent),
+      inset 0 0 14px -4px color-mix(in srgb, var(--gold, #f0c878) 70%, transparent);
+  }
+}
+
+/* --- full-screen inventory modal --- */
+
+#inventory {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--hud-font);
+  color: var(--ink, #cbb89a);
+}
+
+#inventory[hidden] {
+  display: none;
+}
+
+.inv-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--void, #16120c) 72%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.inv-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(15rem, 21rem) 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "head head"
+    "equip grid"
+    "foot foot";
+  gap: 16px;
+  width: min(92vw, 74rem);
+  max-height: min(88dvh, 46rem);
+  padding: 20px;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.inv-head {
+  grid-area: head;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 3px double var(--accent, #ffcc55);
+  font-size: 22px;
+  color: var(--accent, #ffcc55);
+}
+
+.inv-head .inv-gold {
+  font-size: 18px;
+  color: var(--gold, #f0c878);
+}
+
+.inv-equip {
+  grid-area: equip;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.inv-slot-label {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.inv-slot-stats {
+  font-size: 13px;
+  opacity: 0.85;
+  padding: 0 2px;
+}
+
+.inv-affix-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 12.5px;
+  opacity: 0.85;
+}
+
+.inv-amulet-note {
+  margin-top: auto;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--c-amulet, #ffcc55) 50%, var(--edge, #b45a38));
+  color: var(--c-amulet, #ffcc55);
+  font-size: 13px;
+  text-shadow: 0 0 6px currentColor;
+}
+
+.inv-grid-wrap {
+  grid-area: grid;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: min-content;
+  gap: 10px;
+  overflow-y: auto;
+  align-content: start;
+  padding: 2px;
+}
+
+.inv-detail {
+  min-height: 2.4em;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--edge, #b45a38) 50%, transparent);
+  font-size: 14px;
+}
+
+.inv-detail .is-up {
+  color: var(--accent, #ffcc55);
+}
+
+.inv-detail .is-down {
+  color: var(--danger, #c07058);
+}
+
+.inv-foot {
+  grid-area: foot;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--edge, #b45a38) 50%, transparent);
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+@media (max-width: 800px) {
+  .inv-shell {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "head"
+      "equip"
+      "grid"
+      "foot";
+    max-height: 92dvh;
+  }
+
+  .inv-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 #overlay {
   position: fixed;
   z-index: 4;
